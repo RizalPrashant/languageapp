@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>言葉合戦 — Kotoba Kassen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Maru+Gothic:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --washi:#EFE7D8;
+    --washi-dk:#E2D8C3;
+    --sumi:#1C1B19;
+    --aizome:#2B4570;
+    --aizome-lt:#42679C;
+    --vermillion:#C1440E;
+    --gold:#B8923A;
+    --moss:#5C7A4B;
+    --card-bg:#F7F1E3;
+    --shadow: rgba(28,27,25,0.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--sumi);}
+  body{
+    font-family:'Zen Maru Gothic',sans-serif;
+    color:var(--sumi);
+    display:flex;
+    justify-content:center;
+    min-height:100%;
+    padding:14px;
+  }
+  #app{
+    width:100%;
+    max-width:1180px;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(255,255,255,0.5), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(255,255,255,0.35), transparent 45%),
+      var(--washi);
+    border:3px solid var(--sumi);
+    border-radius:6px;
+    padding:14px 16px 18px;
+    position:relative;
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+  }
+  h1{
+    font-family:'Shippori Mincho',serif;
+    font-size:22px;
+    letter-spacing:2px;
+    margin:0 0 2px;
+    text-align:center;
+    color:var(--sumi);
+  }
+  .subtitle{
+    text-align:center;
+    font-size:12px;
+    color:var(--aizome);
+    margin-bottom:10px;
+    letter-spacing:1px;
+  }
+
+  /* ---------- Hero rows ---------- */
+  .hero-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin:4px 0;
+  }
+  .hero{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 12px;
+    border-radius:30px;
+    border:2px solid var(--sumi);
+    background:var(--card-bg);
+    cursor:default;
+    transition:box-shadow .15s, transform .15s;
+  }
+  .hero.targetable{
+    cursor:pointer;
+    box-shadow:0 0 0 3px var(--vermillion);
+  }
+  .hero.targetable:hover{ transform:scale(1.04); }
+  .hero .emblem{
+    width:30px;height:30px;border-radius:50%;
+    background:var(--aizome); color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Shippori Mincho',serif; font-weight:700; font-size:15px;
+  }
+  .hero.enemy .emblem{ background:var(--vermillion); }
+  .hero .hp{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; }
+  .hero .label{ font-size:11px; color:#555; }
+
+  .mana-track{
+    display:flex; align-items:center; gap:4px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+  }
+  .crystal{
+    width:13px;height:13px;border-radius:3px;
+    background:var(--aizome-lt);
+    border:1px solid var(--sumi);
+    transform:rotate(45deg);
+  }
+  .crystal.empty{ background:transparent; opacity:.35; }
+
+  /* ---------- Battlefield ---------- */
+  .field{
+    background:rgba(28,27,25,0.05);
+    border:1px dashed var(--sumi);
+    border-radius:8px;
+    min-height:118px;
+    margin:6px 0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:6px;
+    flex-wrap:wrap;
+  }
+  .field.enemy-field{ background:rgba(193,68,14,0.06); }
+  .field.empty-msg{ color:#888; font-size:12px; font-style:italic; }
+
+  .divider{
+    text-align:center; font-size:11px; color:#777;
+    margin:2px 0; letter-spacing:2px;
+  }
+
+  /* ---------- Cards ---------- */
+  .card{
+    width:88px; height:128px;
+    background:var(--card-bg);
+    border:2px solid var(--sumi);
+    border-radius:7px;
+    position:relative;
+    box-shadow:0 3px 6px var(--shadow);
+    cursor:pointer;
+    transition:transform .12s, box-shadow .12s;
+    flex-shrink:0;
+    user-select:none;
+  }
+  .card:hover{ transform:translateY(-5px); }
+  .card.lg{ width:190px; height:270px; cursor:default; }
+  .card.lg:hover{ transform:none; }
+  .card.spell{ background:linear-gradient(160deg, var(--card-bg) 70%, #EADFC4 100%); }
+  .card.dead{ opacity:.25; pointer-events:none; }
+  .card.armed{ box-shadow:0 0 0 3px var(--gold), 0 3px 6px var(--shadow); transform:translateY(-6px); }
+  .card.targetable{ box-shadow:0 0 0 3px var(--vermillion); }
+  .card.tapped{ filter:grayscale(0.6) brightness(0.9); }
+  .card.taunt{ border-color:var(--moss); border-width:3px; }
+
+  .seal{
+    position:absolute; top:-7px; left:-7px;
+    width:24px;height:24px;border-radius:50%;
+    background:var(--vermillion); color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px;
+    border:2px solid var(--washi);
+  }
+  .card.lg .seal{ width:34px;height:34px; font-size:16px; top:-10px; left:-10px; }
+
+  .card .kana{
+    position:absolute; top:6px; left:0; right:0;
+    text-align:center; font-size:8px; color:#777;
+  }
+  .card.lg .kana{ font-size:13px; top:14px; }
+
+  .card .kanji{
+    position:absolute; top:18px; left:0; right:0;
+    text-align:center;
+    font-family:'Shippori Mincho',serif; font-weight:700;
+    font-size:26px; line-height:1;
+  }
+  .card.lg .kanji{ font-size:54px; top:34px; }
+
+  .card .meaning{
+    position:absolute; bottom: 20px; left:4px; right:4px;
+    text-align:center; font-size:9px; font-weight:700;
+    color:var(--aizome);
+  }
+  .card.lg .meaning{ font-size:14px; bottom:46px; }
+
+  .card .effect{
+    position:absolute; bottom:24px; left:4px; right:4px;
+    font-size:7px; text-align:center; color:#555; line-height:1.15;
+  }
+  .card.lg .effect{ font-size:12px; bottom:56px; line-height:1.3; }
+
+  .stat{
+    position:absolute; bottom:2px; font-family:'JetBrains Mono',monospace;
+    font-weight:700; font-size:11px; width:18px;height:18px;
+    border-radius:50%; display:flex;align-items:center;justify-content:center; color:#fff;
+  }
+  .card.lg .stat{ width:30px;height:30px; font-size:16px; bottom:6px; }
+  .stat.atk{ left:2px; background:var(--sumi); }
+  .stat.lg-atk{ left:6px; }
+  .stat.hp{ right:2px; background:var(--vermillion); }
+  .stat.lg-hp{ right:6px; }
+
+  .keywords{
+    position:absolute; bottom:2px; left:0; right:0; text-align:center;
+    font-size:6px; color:var(--moss); font-weight:700;
+  }
+  .card.lg .keywords{ font-size:11px; bottom:30px; }
+
+  /* ---------- Hand ---------- */
+  .hand-row{
+    display:flex; justify-content:center; gap:6px; margin-top:6px; min-height:138px;
+    flex-wrap:wrap;
+  }
+
+  /* ---------- Bottom bar: inspector + log + controls ---------- */
+  .bottom-bar{
+    display:flex; gap:10px; margin-top:10px; align-items:flex-start;
+  }
+  .inspector{
+    flex:0 0 210px;
+    min-height:140px;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .inspector .placeholder{
+    font-size:12px; color:#888; text-align:center; padding-top:50px;
+  }
+  .mnemonic-box{
+    font-size:10.5px; background:#fff8e8; border:1px solid var(--gold);
+    border-radius:5px; padding:5px 7px; max-width:190px; text-align:center;
+    color:#5a4a1c;
+  }
+  .action-btn{
+    font-family:'Zen Maru Gothic',sans-serif; font-weight:700;
+    border:2px solid var(--sumi); border-radius:20px; padding:6px 16px;
+    background:var(--aizome); color:#fff; cursor:pointer; font-size:13px;
+  }
+  .action-btn:hover{ background:var(--aizome-lt); }
+  .action-btn.cancel{ background:#888; }
+  .action-btn:disabled{ background:#aaa; cursor:not-allowed; }
+
+  .log{
+    flex:1;
+    background:rgba(28,27,25,0.06);
+    border:1px solid var(--sumi);
+    border-radius:6px;
+    height:140px;
+    overflow-y:auto;
+    padding:6px 10px;
+    font-size:11.5px;
+    line-height:1.5;
+  }
+  .log div.turn-marker{ color:var(--vermillion); font-weight:700; margin-top:4px; }
+
+  .controls{
+    flex:0 0 130px;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+  }
+  .turn-banner{
+    font-size:13px; font-weight:700; text-align:center;
+    padding:4px 10px; border-radius:14px;
+    background:var(--card-bg); border:1px solid var(--sumi);
+  }
+  .turn-banner.player{ color:var(--aizome); }
+  .turn-banner.ai{ color:var(--vermillion); }
+
+  .overlay{
+    position:absolute; inset:0; background:rgba(0,0,0,0.75);
+    display:flex; align-items:center; justify-content:center;
+    border-radius:6px;
+  }
+  .overlay-box{
+    background:var(--washi); border:3px solid var(--sumi); border-radius:8px;
+    padding:30px 40px; text-align:center;
+  }
+  .overlay-box h2{ font-family:'Shippori Mincho',serif; font-size:28px; margin:0 0 14px; }
+  .hint{ font-size:11px; color:#777; text-align:center; margin-top:6px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ===================== CARD DATABASE ===================== */
+const CARD_DB = [
+  {id:'cat', kanji:'猫', kana:'ねこ', romaji:'neko', meaning:'Cat', cost:1, type:'minion', atk:1, hp:1, keywords:['Charge'],
+    mnemonic:'猫 = the "beast" radical 犭 plus 苗 (seedling) — small and quick, like a kitten darting through seedlings.'},
+  {id:'fish', kanji:'魚', kana:'さかな', romaji:'sakana', meaning:'Fish', cost:1, type:'minion', atk:1, hp:2},
+  {id:'dog', kanji:'犬', kana:'いぬ', romaji:'inu', meaning:'Dog', cost:2, type:'minion', atk:2, hp:2,
+    mnemonic:'犬 is 大 (big) plus one extra dot — a big dog with one wagging tail-dot.'},
+  {id:'bird', kanji:'鳥', kana:'とり', romaji:'tori', meaning:'Bird', cost:2, type:'minion', atk:1, hp:3},
+  {id:'snake', kanji:'蛇', kana:'へび', romaji:'hebi', meaning:'Snake', cost:2, type:'minion', atk:2, hp:1, keywords:['Poison'],
+    mnemonic:'蛇 pairs the bug radical 虫 with 它 ("it/that") — that creepy little "it" slithering past.'},
+  {id:'stone', kanji:'石', kana:'いし', romaji:'ishi', meaning:'Stone', cost:2, type:'minion', atk:1, hp:4, keywords:['Taunt']},
+  {id:'horse', kanji:'馬', kana:'うま', romaji:'uma', meaning:'Horse', cost:3, type:'minion', atk:3, hp:2, keywords:['Charge']},
+  {id:'tree', kanji:'木', kana:'き', romaji:'ki', meaning:'Tree', cost:3, type:'minion', atk:2, hp:5, keywords:['Taunt'],
+    mnemonic:'木 is a literal pictograph: a trunk with branches reaching up, roots below.'},
+  {id:'bear', kanji:'熊', kana:'くま', romaji:'kuma', meaning:'Bear', cost:4, type:'minion', atk:4, hp:4},
+  {id:'mountain', kanji:'山', kana:'やま', romaji:'yama', meaning:'Mountain', cost:4, type:'minion', atk:0, hp:7, keywords:['Taunt'],
+    mnemonic:'山 literally draws three mountain peaks side by side.'},
+  {id:'oni', kanji:'鬼', kana:'おに', romaji:'oni', meaning:'Demon', cost:6, type:'minion', atk:6, hp:6},
+  {id:'dragon', kanji:'龍', kana:'りゅう', romaji:'ryuu', meaning:'Dragon', cost:8, type:'minion', atk:8, hp:8,
+    mnemonic:'龍 is one of the most complex common kanji — fitting for the rarest, priciest beast in the deck.'},
+
+  {id:'fire', kanji:'火', kana:'ひ', romaji:'hi', meaning:'Fire', cost:2, type:'spell', target:'enemyMinion', effect:'dmg3',
+    effectText:'Deal 3 damage to an enemy minion.', mnemonic:'火 looks like flickering flames rising from a small fire.'},
+  {id:'water', kanji:'水', kana:'みず', romaji:'mizu', meaning:'Water', cost:2, type:'spell', target:'none', effect:'heal4',
+    effectText:'Restore 4 Health to your hero.'},
+  {id:'wind', kanji:'風', kana:'かぜ', romaji:'kaze', meaning:'Wind', cost:1, type:'spell', target:'none', effect:'draw1',
+    effectText:'Draw a card.'},
+  {id:'heal', kanji:'治す', kana:'なおす', romaji:'naosu', meaning:'To heal', cost:3, type:'spell', target:'none', effect:'heal6',
+    effectText:'Restore 6 Health to your hero.'},
+  {id:'destroy', kanji:'壊す', kana:'こわす', romaji:'kowasu', meaning:'To destroy', cost:5, type:'spell', target:'enemyMinion', effect:'destroy',
+    effectText:'Destroy an enemy minion.'},
+  {id:'strong', kanji:'強い', kana:'つよい', romaji:'tsuyoi', meaning:'Strong', cost:2, type:'spell', target:'friendlyMinion', effect:'buff22',
+    effectText:'Give a friendly minion +2/+2.'},
+  {id:'fast', kanji:'速い', kana:'はやい', romaji:'hayai', meaning:'Fast', cost:1, type:'spell', target:'friendlyMinion', effect:'rush',
+    effectText:'A friendly minion can attack immediately.'},
+  {id:'thunder', kanji:'雷', kana:'かみなり', romaji:'kaminari', meaning:'Thunder', cost:4, type:'spell', target:'none', effect:'dmgAll4',
+    effectText:'Deal 4 damage to all enemy minions.', mnemonic:'雷 stacks 雨 (rain) over 田 (field) — a storm crackling over the rice paddies.'}
+];
+
+/* ===================== STATE ===================== */
+let nextInstanceId = 1;
+function makeInstance(tpl){
+  const inst = Object.assign({}, tpl, {iid:'c'+(nextInstanceId++)});
+  if(tpl.type==='minion'){
+    inst.curAtk = tpl.atk;
+    inst.curHp = tpl.hp;
+    inst.maxHp = tpl.hp;
+    inst.canAttack = (tpl.keywords||[]).includes('Charge');
+    inst.hasAttacked = false;
+  }
+  return inst;
+}
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
+}
+function buildDeck(){
+  return shuffle(CARD_DB.map(makeInstance));
+}
+
+let S = null;
+function newGame(){
+  S = {
+    turn:'player',
+    turnNumber:1,
+    playerHp:25, aiHp:25,
+    playerMaxMana:0, playerMana:0,
+    aiMaxMana:0, aiMana:0,
+    playerFatigue:0, aiFatigue:0,
+    playerDeck: buildDeck(), aiDeck: buildDeck(),
+    playerHand:[], aiHand:[],
+    playerBoard:[], aiBoard:[],
+    pending:null, // {type:'play', card, idxInHand} or {type:'attack', attackerId}
+    inspect:null,
+    over:null,
+    log:[]
+  };
+  for(let i=0;i<4;i++){ drawCard('player'); drawCard('ai'); }
+  startTurn('player');
+}
+
+function logMsg(text, marker){
+  S.log.push({text, marker});
+  if(S.log.length>200) S.log.shift();
+}
+
+function drawCard(side){
+  const deck = side==='player'? S.playerDeck : S.aiDeck;
+  const hand = side==='player'? S.playerHand : S.aiHand;
+  if(deck.length===0){
+    if(side==='player'){ S.playerFatigue++; S.playerHp -= S.playerFatigue; logMsg(`You have no cards left! Fatigue deals ${S.playerFatigue} damage.`); }
+    else { S.aiFatigue++; S.aiHp -= S.aiFatigue; logMsg(`Opponent's deck is empty! Fatigue deals ${S.aiFatigue} damage.`); }
+    return;
+  }
+  if(hand.length>=10){ deck.shift(); return; } // burn card if hand full
+  hand.push(deck.shift());
+}
+
+function startTurn(side){
+  S.turn = side;
+  S.pending = null;
+  if(side==='player'){
+    S.playerMaxMana = Math.min(10, S.playerMaxMana+1);
+    S.playerMana = S.playerMaxMana;
+    S.playerBoard.forEach(m=>{ m.canAttack = true; m.hasAttacked=false; });
+    drawCard('player');
+    logMsg(`— Your turn ${S.turnNumber} —`, true);
+  } else {
+    S.aiMaxMana = Math.min(10, S.aiMaxMana+1);
+    S.aiMana = S.aiMaxMana;
+    S.aiBoard.forEach(m=>{ m.canAttack = true; m.hasAttacked=false; });
+    drawCard('ai');
+    logMsg(`— Opponent's turn ${S.turnNumber} —`, true);
+  }
+  checkGameOver();
+}
+
+function endPlayerTurn(){
+  if(S.over || S.turn!=='player') return;
+  S.pending = null;
+  render();
+  setTimeout(()=>{ aiTurn(); }, 350);
+}
+
+/* ===================== AI ===================== */
+function aiTurn(){
+  if(S.over) return;
+  startTurn('ai');
+  // Play cards greedily
+  let safety = 0;
+  while(safety++ < 20){
+    const playableIdx = S.aiHand.findIndex(c => c.cost <= S.aiMana && cardHasLegalTarget(c,'ai'));
+    if(playableIdx===-1) break;
+    const card = S.aiHand[playableIdx];
+    if(card.type==='minion'){
+      if(S.aiBoard.length>=7){ break; }
+      S.aiHand.splice(playableIdx,1);
+      S.aiMana -= card.cost;
+      const inst = card; // already an instance from hand
+      inst.canAttack = (inst.keywords||[]).includes('Charge');
+      inst.hasAttacked=false;
+      S.aiBoard.push(inst);
+      logMsg(`Opponent plays 「${inst.kanji}」 (${inst.meaning}).`);
+    } else {
+      S.aiHand.splice(playableIdx,1);
+      S.aiMana -= card.cost;
+      resolveSpell(card,'ai', pickAiTarget(card));
+    }
+    render();
+  }
+  // Attack phase
+  S.aiBoard.forEach(att=>{
+    if(!att.canAttack || att.hasAttacked || att.curHp<=0) return;
+    const taunts = S.playerBoard.filter(m=>(m.keywords||[]).includes('Taunt') && m.curHp>0);
+    let target;
+    if(taunts.length>0){ target = taunts[Math.floor(Math.random()*taunts.length)]; }
+    else if(S.playerBoard.length>0 && Math.random()<0.45){
+      target = S.playerBoard[Math.floor(Math.random()*S.playerBoard.length)];
+    }
+    if(target){ performAttack(att, target, 'ai'); }
+    else { performAttack(att, 'hero', 'ai'); }
+  });
+  render();
+  setTimeout(()=>{ if(!S.over) startTurn('player'); S.turnNumber++; render(); }, 400);
+}
+
+function pickAiTarget(card){
+  if(card.target==='enemyMinion'){
+    const pool = S.playerBoard.filter(m=>m.curHp>0);
+    return pool.length? pool[Math.floor(Math.random()*pool.length)] : null;
+  }
+  if(card.target==='friendlyMinion'){
+    const pool = S.aiBoard.filter(m=>m.curHp>0);
+    return pool.length? pool[Math.floor(Math.random()*pool.length)] : null;
+  }
+  return null;
+}
+function cardHasLegalTarget(card, side){
+  if(card.target==='enemyMinion'){
+    const board = side==='ai'? S.playerBoard : S.aiBoard;
+    return board.some(m=>m.curHp>0);
+  }
+  if(card.target==='friendlyMinion'){
+    const board = side==='ai'? S.aiBoard : S.playerBoard;
+    return board.some(m=>m.curHp>0);
+  }
+  return true;
+}
+
+/* ===================== SPELLS ===================== */
+function resolveSpell(card, side, target){
+  const friendlyHp = (n)=>{ if(side==='player'){ S.playerHp = Math.min(25, S.playerHp+n);} else { S.aiHp = Math.min(25, S.aiHp+n);} };
+  switch(card.effect){
+    case 'dmg3':
+      if(target){ target.curHp -= 3; logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」: 3 damage to 「${target.kanji}」.`); }
+      break;
+    case 'heal4': friendlyHp(4); logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」: healed 4.`); break;
+    case 'heal6': friendlyHp(6); logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」: healed 6.`); break;
+    case 'draw1': drawCard(side); logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」: drew a card.`); break;
+    case 'destroy':
+      if(target){ target.curHp = -999; logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」: destroyed 「${target.kanji}」.`); }
+      break;
+    case 'buff22':
+      if(target){ target.curAtk+=2; target.curHp+=2; target.maxHp+=2; logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」 on 「${target.kanji}」 (+2/+2).`); }
+      break;
+    case 'rush':
+      if(target){ target.canAttack=true; target.hasAttacked=false; logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」 on 「${target.kanji}」.`); }
+      break;
+    case 'dmgAll4': {
+      const board = side==='player'? S.aiBoard : S.playerBoard;
+      board.forEach(m=>{ if(m.curHp>0) m.curHp -= 4; });
+      logMsg(`${side==='player'?'You':'Opponent'} cast 「${card.kanji}」: 4 damage to all enemy minions.`);
+      break;
+    }
+  }
+  cleanupBoards();
+}
+
+function cleanupBoards(){
+  S.playerBoard = S.playerBoard.filter(m=>{
+    if(m.curHp<=0){ logMsg(`「${m.kanji}」 (yours) died.`); return false; }
+    return true;
+  });
+  S.aiBoard = S.aiBoard.filter(m=>{
+    if(m.curHp<=0){ logMsg(`「${m.kanji}」 (opponent's) died.`); return false; }
+    return true;
+  });
+  checkGameOver();
+}
+
+/* ===================== COMBAT ===================== */
+function performAttack(attacker, targetOrHero, side){
+  attacker.hasAttacked = true;
+  attacker.canAttack = false;
+  const isHeroTarget = targetOrHero === 'hero';
+  if(isHeroTarget){
+    if(side==='player'){ S.aiHp -= attacker.curAtk; logMsg(`Your 「${attacker.kanji}」 attacks the enemy hero for ${attacker.curAtk}.`); }
+    else { S.playerHp -= attacker.curAtk; logMsg(`Opponent's 「${attacker.kanji}」 attacks you for ${attacker.curAtk}.`); }
+  } else {
+    const target = targetOrHero;
+    target.curHp -= attacker.curAtk;
+    attacker.curHp -= target.curAtk;
+    const poisonAtt = (attacker.keywords||[]).includes('Poison');
+    const poisonTgt = (target.keywords||[]).includes('Poison');
+    if(poisonAtt && target.curAtk>=0) target.curHp = -999;
+    if(poisonTgt) attacker.curHp = -999;
+    logMsg(`${side==='player'?'Your':"Opponent's"} 「${attacker.kanji}」 fights 「${target.kanji}」 (${attacker.curAtk} ⇄ ${target.curAtk}).`);
+  }
+  cleanupBoards();
+}
+
+/* ===================== PLAYER INPUT ===================== */
+function clickHandCard(idx){
+  if(S.over || S.turn!=='player') return;
+  const card = S.playerHand[idx];
+  if(S.pending && S.pending.type==='play' && S.pending.idxInHand===idx){ S.pending=null; S.inspect=null; render(); return; }
+  S.inspect = {kind:'hand', card};
+  if(card.cost<=S.playerMana){
+    S.pending = {type:'play', card, idxInHand:idx};
+  } else {
+    S.pending = null;
+  }
+  render();
+}
+
+function playArmedCard(){
+  if(!S.pending || S.pending.type!=='play') return;
+  const {card, idxInHand} = S.pending;
+  if(card.cost>S.playerMana) return;
+  if(card.type==='minion'){
+    if(S.playerBoard.length>=7){ logMsg(`Your board is full (7 max).`); return; }
+    S.playerHand.splice(idxInHand,1);
+    S.playerMana -= card.cost;
+    card.canAttack = (card.keywords||[]).includes('Charge');
+    card.hasAttacked=false;
+    S.playerBoard.push(card);
+    logMsg(`You play 「${card.kanji}」 (${card.meaning}).`);
+    S.pending=null; S.inspect=null;
+    cleanupBoards();
+  } else {
+    if(card.target==='none'){
+      S.playerHand.splice(idxInHand,1);
+      S.playerMana -= card.cost;
+      resolveSpell(card,'player',null);
+      S.pending=null; S.inspect=null;
+    } else {
+      // enter targeting mode
+      S.pending = {type:'targeting', card, idxInHand};
+    }
+  }
+  render();
+}
+
+function clickBoardMinion(minion, side){
+  if(S.over) return;
+  if(S.pending && S.pending.type==='targeting'){
+    const card = S.pending.card;
+    const validSide = card.target==='enemyMinion' ? 'ai' : 'player';
+    if(side!==validSide || minion.curHp<=0) return;
+    S.playerHand.splice(S.pending.idxInHand,1);
+    S.playerMana -= card.cost;
+    resolveSpell(card,'player',minion);
+    S.pending=null; S.inspect=null;
+    render();
+    return;
+  }
+  if(S.pending && S.pending.type==='attack'){
+    const attacker = S.pending.attacker;
+    if(side!=='ai'){ return; }
+    const taunts = S.aiBoard.filter(m=>(m.keywords||[]).includes('Taunt') && m.curHp>0);
+    if(taunts.length>0 && !(minion.keywords||[]).includes('Taunt')){
+      logMsg(`You must attack a Taunt minion first.`);
+      return;
+    }
+    performAttack(attacker, minion, 'player');
+    S.pending=null; S.inspect=null;
+    render();
+    return;
+  }
+  // plain inspect, and possibly arm an attacker
+  S.inspect = {kind:'board', card:minion, side};
+  if(S.turn==='player' && side==='player' && minion.canAttack && !minion.hasAttacked && minion.curHp>0){
+    S.pending = {type:'readyAttacker', attacker:minion};
+  } else {
+    S.pending=null;
+  }
+  render();
+}
+
+function armAttack(){
+  if(!S.pending || S.pending.type!=='readyAttacker') return;
+  S.pending = {type:'attack', attacker:S.pending.attacker};
+  render();
+}
+
+function clickEnemyHero(){
+  if(S.over) return;
+  if(S.pending && S.pending.type==='attack'){
+    const attacker = S.pending.attacker;
+    const taunts = S.aiBoard.filter(m=>(m.keywords||[]).includes('Taunt') && m.curHp>0);
+    if(taunts.length>0){ logMsg(`You must attack a Taunt minion first.`); return; }
+    performAttack(attacker, 'hero', 'player');
+    S.pending=null; S.inspect=null;
+    render();
+  }
+}
+
+function cancelPending(){ S.pending=null; S.inspect=null; render(); }
+
+function checkGameOver(){
+  if(S.playerHp<=0 && !S.over){ S.over='lose'; logMsg('Your hero has fallen. Defeat.'); }
+  if(S.aiHp<=0 && !S.over){ S.over='win'; logMsg("The opponent's hero has fallen. Victory!"); }
+}
+
+/* ===================== RENDER ===================== */
+function cardFace(c, opts={}){
+  const cls = ['card'];
+  if(opts.lg) cls.push('lg');
+  if(c.type==='spell') cls.push('spell');
+  if((c.keywords||[]).includes('Taunt')) cls.push('taunt');
+  if(c.curHp!==undefined && c.curHp<=0) cls.push('dead');
+  if(opts.armed) cls.push('armed');
+  if(opts.targetable) cls.push('targetable');
+  if(opts.tapped) cls.push('tapped');
+  const kw = (c.keywords||[]).join(' · ');
+  let body;
+  if(c.type==='minion'){
+    body = `
+      <div class="kana">${c.kana}</div>
+      <div class="kanji">${c.kanji}</div>
+      <div class="meaning">${c.meaning}</div>
+      ${kw? `<div class="keywords">${kw}</div>`:''}
+      <div class="stat atk ${opts.lg?'lg-atk':''}">${c.curAtk!==undefined?c.curAtk:c.atk}</div>
+      <div class="stat hp ${opts.lg?'lg-hp':''}">${c.curHp!==undefined?c.curHp:c.hp}</div>
+    `;
+  } else {
+    body = `
+      <div class="kana">${c.kana}</div>
+      <div class="kanji">${c.kanji}</div>
+      <div class="meaning">${c.meaning}</div>
+      <div class="effect">${c.effectText}</div>
+    `;
+  }
+  return `<div class="${cls.join(' ')}" data-iid="${c.iid}">
+      <div class="seal">${c.cost}</div>
+      ${body}
+    </div>`;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const targetingEnemyMinion = S.pending && (S.pending.type==='attack' || (S.pending.type==='targeting' && S.pending.card.target==='enemyMinion'));
+  const targetingFriendlyMinion = S.pending && S.pending.type==='targeting' && S.pending.card.target==='friendlyMinion';
+  const heroTargetable = S.pending && S.pending.type==='attack';
+
+  const aiBoardHtml = S.aiBoard.length? S.aiBoard.map(m=>cardFace(m,{targetable: targetingEnemyMinion && m.curHp>0})).join('') : `<div class="field empty-msg">No minions</div>`;
+  const playerBoardHtml = S.playerBoard.length? S.playerBoard.map(m=>{
+    const armed = S.pending && (S.pending.type==='readyAttacker'||S.pending.type==='attack') && S.pending.attacker===m;
+    const targetable = targetingFriendlyMinion && m.curHp>0;
+    const tapped = m.hasAttacked || (!m.canAttack && S.turn==='player');
+    return cardFace(m,{armed, targetable, tapped: tapped && !armed});
+  }).join('') : `<div class="field empty-msg">No minions</div>`;
+
+  const handHtml = S.playerHand.map((c,idx)=>{
+    const armed = S.pending && S.pending.idxInHand===idx && (S.pending.type==='play'||S.pending.type==='targeting');
+    const affordable = c.cost<=S.playerMana;
+    return `<div data-hand-idx="${idx}" style="${affordable?'':'opacity:.45;'}">${cardFace(c,{armed})}</div>`;
+  }).join('');
+
+  const manaTrack = (max,cur)=>{
+    let s='';
+    for(let i=0;i<max;i++) s += `<div class="crystal ${i<cur?'':'empty'}"></div>`;
+    return s;
+  };
+
+  let inspectorHtml = `<div class="placeholder">Click any card to inspect it here.</div>`;
+  if(S.inspect){
+    const c = S.inspect.card;
+    inspectorHtml = cardFace(c,{lg:true});
+    if(c.mnemonic){
+      inspectorHtml += `<div class="mnemonic-box">💡 ${c.mnemonic}</div>`;
+    } else {
+      inspectorHtml += `<div class="mnemonic-box" style="opacity:.6;">No mnemonic yet — add one later!</div>`;
+    }
+    if(S.pending && S.pending.type==='play'){
+      inspectorHtml += `<button class="action-btn" id="btnPlay">Play</button>`;
+    } else if(S.pending && S.pending.type==='targeting'){
+      inspectorHtml += `<div style="font-size:11px;color:var(--vermillion);font-weight:700;">Choose a target on the board…</div><button class="action-btn cancel" id="btnCancel">Cancel</button>`;
+    } else if(S.pending && S.pending.type==='readyAttacker'){
+      inspectorHtml += `<button class="action-btn" id="btnAttack">Attack with this</button>`;
+    } else if(S.pending && S.pending.type==='attack'){
+      inspectorHtml += `<div style="font-size:11px;color:var(--vermillion);font-weight:700;">Choose a target to attack…</div><button class="action-btn cancel" id="btnCancel">Cancel</button>`;
+    }
+  }
+
+  const logHtml = S.log.slice(-60).map(l=> l.marker? `<div class="turn-marker">${l.text}</div>` : `<div>${l.text}</div>`).join('');
+
+  let overlay = '';
+  if(S.over){
+    overlay = `<div class="overlay"><div class="overlay-box">
+      <h2>${S.over==='win'?'勝利 — Victory!':'敗北 — Defeat'}</h2>
+      <button class="action-btn" id="btnRestart">Play again</button>
+    </div></div>`;
+  }
+
+  app.innerHTML = `
+    <h1>言葉合戦 <span style="font-size:14px;">Kotoba Kassen</span></h1>
+    <div class="subtitle">a Hearthstone-style card battle, played in Japanese vocabulary</div>
+
+    <div class="hero-row">
+      <div class="hero enemy ${heroTargetable?'targetable':''}" id="aiHero"><div class="emblem">敵</div><div><div class="label">Opponent</div><div class="hp">${Math.max(0,S.aiHp)} HP</div></div></div>
+      <div class="mana-track">${manaTrack(S.aiMaxMana,S.aiMana)}</div>
+    </div>
+    <div class="field enemy-field">${aiBoardHtml}</div>
+
+    <div class="divider">⚔ battlefield ⚔</div>
+
+    <div class="field">${playerBoardHtml}</div>
+    <div class="hero-row">
+      <div class="hero"><div class="emblem">私</div><div><div class="label">You</div><div class="hp">${Math.max(0,S.playerHp)} HP</div></div></div>
+      <div class="mana-track">${manaTrack(S.playerMaxMana,S.playerMana)}</div>
+    </div>
+
+    <div class="hand-row">${handHtml}</div>
+
+    <div class="bottom-bar">
+      <div class="inspector">${inspectorHtml}</div>
+      <div class="log">${logHtml}</div>
+      <div class="controls">
+        <div class="turn-banner ${S.turn}">${S.turn==='player'?'Your turn':"Opponent's turn"}</div>
+        <button class="action-btn" id="btnEndTurn" ${S.turn!=='player'||S.over?'disabled':''}>End Turn</button>
+        <div class="hint">Click a card to inspect.<br>Use the button to act.</div>
+      </div>
+    </div>
+    ${overlay}
+  `;
+
+  // wire events
+  app.querySelectorAll('[data-hand-idx]').forEach(el=>{
+    el.addEventListener('click',()=>clickHandCard(parseInt(el.dataset.handIdx)));
+  });
+  Array.from(app.querySelectorAll('.field')[0]?.querySelectorAll('[data-iid]')||[]).forEach(el=>{
+    const m = S.aiBoard.find(x=>x.iid===el.dataset.iid);
+    if(m) el.addEventListener('click',()=>clickBoardMinion(m,'ai'));
+  });
+  const fields = app.querySelectorAll('.field');
+  if(fields[1]){
+    fields[1].querySelectorAll('[data-iid]').forEach(el=>{
+      const m = S.playerBoard.find(x=>x.iid===el.dataset.iid);
+      if(m) el.addEventListener('click',()=>clickBoardMinion(m,'player'));
+    });
+  }
+  const aiHeroEl = document.getElementById('aiHero');
+  if(aiHeroEl) aiHeroEl.addEventListener('click', clickEnemyHero);
+  const btnPlay = document.getElementById('btnPlay'); if(btnPlay) btnPlay.addEventListener('click', playArmedCard);
+  const btnAttack = document.getElementById('btnAttack'); if(btnAttack) btnAttack.addEventListener('click', armAttack);
+  const btnCancel = document.getElementById('btnCancel'); if(btnCancel) btnCancel.addEventListener('click', cancelPending);
+  const btnEnd = document.getElementById('btnEndTurn'); if(btnEnd) btnEnd.addEventListener('click', endPlayerTurn);
+  const btnRestart = document.getElementById('btnRestart'); if(btnRestart) btnRestart.addEventListener('click', newGame_render);
+
+  const logEl = app.querySelector('.log');
+  if(logEl) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function newGame_render(){ newGame(); render(); }
+
+newGame();
+render();
+</script>
+</body>
+</html>

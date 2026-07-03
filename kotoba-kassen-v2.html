@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>言葉合戦 v2 — Kotoba Kassen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Maru+Gothic:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --washi:#EFE7D8; --washi-dk:#E2D8C3; --sumi:#1C1B19;
+    --aizome:#2B4570; --aizome-lt:#42679C; --vermillion:#C1440E;
+    --gold:#B8923A; --moss:#5C7A4B; --card-bg:#F7F1E3;
+    --verb:#7A4B8A; --adj:#B8923A; --emotion:#C1457A; --shadow: rgba(28,27,25,0.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--sumi);}
+  body{ font-family:'Zen Maru Gothic',sans-serif; color:var(--sumi); display:flex; justify-content:center; min-height:100%; padding:14px; }
+  #app{
+    width:100%; max-width:1180px;
+    background: radial-gradient(circle at 15% 10%, rgba(255,255,255,0.5), transparent 40%),
+                radial-gradient(circle at 85% 90%, rgba(255,255,255,0.35), transparent 45%), var(--washi);
+    border:3px solid var(--sumi); border-radius:6px; padding:12px 16px 18px; position:relative;
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+  }
+  h1{ font-family:'Shippori Mincho',serif; font-size:21px; letter-spacing:2px; margin:0 0 2px; text-align:center; }
+  .subtitle{ text-align:center; font-size:11.5px; color:var(--aizome); margin-bottom:4px; }
+  .legend{ display:flex; justify-content:center; gap:16px; font-size:10.5px; margin-bottom:8px; flex-wrap:wrap;}
+  .legend span{ display:flex; align-items:center; gap:4px; }
+  .dot{ width:9px;height:9px;border-radius:50%; display:inline-block; }
+  .dot.noun{ background:var(--aizome); }
+  .dot.verb{ background:var(--verb); }
+  .dot.adj{ background:var(--adj); }
+  .dot.emotion{ background:var(--emotion); }
+  .shield-tag{ color:var(--aizome-lt); font-weight:700; }
+
+  .hero-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:4px 0; }
+  .hero{ display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:30px; border:2px solid var(--sumi); background:var(--card-bg); transition:box-shadow .15s, transform .15s; }
+  .hero.targetable{ cursor:crosshair; box-shadow:0 0 0 3px var(--vermillion); animation:pulseRed 1.1s ease-in-out infinite; }
+  .hero.targetable:hover{ transform:scale(1.04); }
+  .hero .emblem{ width:30px;height:30px;border-radius:50%; background:var(--aizome); color:#fff; display:flex;align-items:center;justify-content:center; font-family:'Shippori Mincho',serif; font-weight:700; font-size:15px; }
+  .hero.enemy .emblem{ background:var(--vermillion); }
+  .hero .hp{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; }
+  .hero .label{ font-size:11px; color:#555; }
+
+  .mana-track{ display:flex; align-items:center; gap:4px; font-family:'JetBrains Mono',monospace; font-size:12px; }
+  .crystal{ width:13px;height:13px;border-radius:3px; background:var(--aizome-lt); border:1px solid var(--sumi); transform:rotate(45deg); }
+  .crystal.empty{ background:transparent; opacity:.35; }
+
+  .field{ background:rgba(28,27,25,0.05); border:1px dashed var(--sumi); border-radius:8px; min-height:118px; margin:6px 0; display:flex; align-items:center; justify-content:center; gap:8px; padding:6px; flex-wrap:wrap; transition:background .15s, border-color .15s; }
+  .field.enemy-field{ background:rgba(193,68,14,0.06); }
+  .field.empty-msg{ color:#888; font-size:12px; font-style:italic; }
+  .field.drag-over{ background:rgba(184,146,58,0.18); border-color:var(--gold); border-style:solid; }
+  .card[data-draggable="1"]{ cursor:grab; }
+  .ghost-card{ position:fixed; pointer-events:none; z-index:9999; }
+  .card.dragging{ opacity:.35; }
+  .drop-marker{ width:3px; align-self:stretch; background:var(--gold); border-radius:2px; flex-shrink:0; }
+  .divider{ text-align:center; font-size:11px; color:#777; margin:2px 0; letter-spacing:2px; }
+
+  .card{ width:90px; height:132px; background:var(--card-bg); border:2px solid var(--sumi); border-radius:7px; position:relative; box-shadow:0 3px 6px var(--shadow); cursor:pointer; transition:transform .12s, box-shadow .12s; flex-shrink:0; user-select:none; overflow:hidden; }
+  .card:hover{ transform:translateY(-5px); }
+  .card.lg{ width:210px; height:300px; cursor:default; }
+  .card.lg:hover{ transform:none; }
+  .card.verb{ background:linear-gradient(160deg, var(--card-bg) 65%, #ECE0F2 100%); }
+  .card.adjective{ background:linear-gradient(160deg, var(--card-bg) 65%, #F5EBCF 100%); }
+  .card.emotion{ background:linear-gradient(160deg, var(--card-bg) 65%, #F7E2EC 100%); }
+  .card.dead{ opacity:.25; pointer-events:none; }
+  .card.armed{ box-shadow:0 0 0 3px var(--gold), 0 3px 6px var(--shadow); transform:translateY(-6px); animation:pulseGold 1.1s ease-in-out infinite; }
+  .card.armed.attacker::after{
+    content:'⚔'; position:absolute; top:-12px; right:-10px; width:24px; height:24px;
+    background:var(--vermillion); color:#fff; border:2px solid var(--washi); border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:12px; z-index:3;
+  }
+  .card.targetable{ cursor:crosshair; box-shadow:0 0 0 3px var(--vermillion); animation:pulseRed 1.1s ease-in-out infinite; }
+  .card.drop-hover{ box-shadow:0 0 0 4px var(--gold) !important; transform:scale(1.08) !important; animation:none !important; }
+  @keyframes pulseGold{ 0%,100%{ box-shadow:0 0 0 3px var(--gold), 0 3px 6px var(--shadow); } 50%{ box-shadow:0 0 0 6px var(--gold), 0 3px 10px var(--shadow); } }
+  @keyframes pulseRed{ 0%,100%{ box-shadow:0 0 0 3px var(--vermillion); } 50%{ box-shadow:0 0 0 6px var(--vermillion); } }
+  .card.tapped{ filter:grayscale(0.6) brightness(0.9); }
+  .card.taunt{ border-color:var(--moss); border-width:3px; }
+  .card.boosted{ box-shadow:0 0 0 3px var(--adj); }
+
+  .typebadge{ position:absolute; top:2px; right:5px; font-size:6px; letter-spacing:.5px; color:#888; text-transform:uppercase; font-weight:700;}
+  .card.lg .typebadge{ font-size:10px; top:6px; right:10px; }
+
+  .seal{ position:absolute; top:-7px; left:-7px; width:24px;height:24px;border-radius:50%; background:var(--vermillion); color:#fff; display:flex;align-items:center;justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px; border:2px solid var(--washi); z-index:2; }
+  .card.lg .seal{ width:34px;height:34px; font-size:16px; top:-10px; left:-10px; }
+  .card.verb .seal, .card.adjective .seal{ background:var(--verb); }
+  .card.adjective .seal{ background:var(--adj); }
+  .card.emotion .seal{ background:var(--emotion); }
+  .card.emotion .meaning{ color:var(--emotion); }
+
+  .kana{ position:absolute; top:6px; left:0; right:0; text-align:center; font-size:7.5px; color:#777; }
+  .card.lg .kana{ font-size:13px; top:16px; }
+
+  .icon{ position:absolute; top:16px; left:0; right:0; text-align:center; font-size:24px; line-height:1; }
+  .card.lg .icon{ font-size:50px; top:36px; }
+
+  .scene{ position:absolute; top:15px; left:0; right:0; text-align:center; font-size:19px; letter-spacing:4px; }
+  .card.lg .scene{ font-size:40px; letter-spacing:10px; top:34px; }
+
+  .kanji{ position:absolute; left:0; right:0; text-align:center; font-family:'Shippori Mincho',serif; font-weight:700; font-size:13px; }
+  .card.lg .kanji{ font-size:22px; }
+
+  .meaning{ position:absolute; left:2px; right:2px; text-align:center; font-size:8px; font-weight:700; color:var(--aizome); }
+  .card.lg .meaning{ font-size:13px; }
+  .card.verb .meaning, .card.adjective .meaning{ color:var(--verb); }
+  .card.adjective .meaning{ color:#8a6d1f; }
+
+  .microtext{ position:absolute; left:3px; right:3px; bottom:3px; font-size:6px; line-height:1.15; color:#555; text-align:center;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .card.lg .microtext{ position:static; font-size:11.5px; line-height:1.35; margin-top:6px; -webkit-line-clamp:unset; }
+
+  .stat{ position:absolute; bottom:2px; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:11px; width:18px;height:18px; border-radius:50%; display:flex;align-items:center;justify-content:center; color:#fff; z-index:2; }
+  .card.lg .stat{ width:30px;height:30px; font-size:16px; bottom:6px; }
+  .stat.atk{ left:2px; background:var(--sumi); }
+  .stat.hp{ right:2px; background:var(--vermillion); }
+
+  .keywords{ position:absolute; bottom:22px; left:0; right:0; text-align:center; font-size:6px; color:var(--moss); font-weight:700; }
+  .card.lg .keywords{ font-size:11px; bottom:38px; }
+
+  .hand-row{ display:flex; justify-content:center; gap:6px; margin-top:6px; min-height:142px; flex-wrap:wrap; }
+  .narrate-bar{ display:flex; gap:8px; margin-top:8px; }
+  .grammar-bar{ display:flex; gap:6px; justify-content:center; margin-top:8px; flex-wrap:wrap; align-items:stretch; }
+  .grammar-btn{
+    font-family:'Zen Maru Gothic',sans-serif; border:2px solid var(--sumi); border-radius:8px;
+    background:linear-gradient(160deg, var(--card-bg) 60%, #DCE8DF 100%);
+    padding:5px 9px; cursor:pointer; text-align:center; width:132px; position:relative;
+  }
+  .grammar-btn:hover:not(:disabled){ background:#DCE8DF; }
+  .grammar-btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .grammar-btn .gp-jp{ font-family:'Shippori Mincho',serif; font-weight:700; font-size:13px; color:var(--moss); }
+  .grammar-btn .gp-gloss{ font-size:9px; color:#555; }
+  .grammar-btn .gp-cost{
+    position:absolute; top:-7px; left:-7px; width:20px; height:20px; border-radius:50%;
+    background:var(--moss); color:#fff; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:11px;
+    display:flex; align-items:center; justify-content:center; border:2px solid var(--washi);
+  }
+  .grammar-label{ text-align:center; font-size:10px; color:#777; margin-top:8px; letter-spacing:1px; }
+  .grammar-credit{ text-align:center; font-size:9px; color:#999; margin-top:2px; }
+  .grammar-credit a{ color:var(--aizome); }
+
+  /* 図鑑 Guidebook */
+  .gb-box{ width:min(720px, 92%); max-height:82%; display:flex; flex-direction:column; text-align:left; padding:18px 20px; }
+  .gb-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .gb-head h2{ font-size:22px; margin:0; }
+  .gb-tabs{ display:flex; gap:5px; margin-bottom:10px; flex-wrap:wrap; }
+  .gb-tab{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px; border:2px solid var(--sumi); border-radius:14px; padding:3px 12px; background:var(--card-bg); cursor:pointer; }
+  .gb-tab.active{ background:var(--aizome); color:#fff; }
+  .gb-body{ display:flex; gap:12px; overflow:hidden; flex:1; min-height:260px; }
+  .gb-list{ flex:0 0 200px; overflow-y:auto; border-right:1px solid var(--washi-dk); padding-right:8px; }
+  .gb-item{ padding:6px 8px; border-radius:6px; cursor:pointer; margin-bottom:2px; }
+  .gb-item:hover{ background:rgba(43,69,112,0.08); }
+  .gb-item.active{ background:rgba(43,69,112,0.15); }
+  .gb-item .gb-jp{ font-family:'Shippori Mincho',serif; font-weight:700; font-size:14px; }
+  .gb-item .gb-gloss{ font-size:10px; color:#666; }
+  .gb-item .soon-pill{ font-size:8px; background:#ccc; border-radius:8px; padding:1px 6px; margin-left:4px; vertical-align:middle; color:#555; font-weight:700; }
+  .gb-item .live-pill{ font-size:8px; background:var(--moss); color:#fff; border-radius:8px; padding:1px 6px; margin-left:4px; vertical-align:middle; font-weight:700; }
+  .gb-detail{ flex:1; overflow-y:auto; }
+  .gb-detail h3{ font-family:'Shippori Mincho',serif; font-size:24px; margin:0; }
+  .gb-detail .gb-romaji{ font-size:12px; color:#777; margin-bottom:10px; }
+  .gb-section{ margin-bottom:12px; }
+  .gb-section .gb-tag{ font-size:10px; letter-spacing:1px; font-weight:700; color:var(--aizome); text-transform:uppercase; }
+  .gb-section p{ margin:3px 0 0; font-size:13px; line-height:1.5; }
+  .gb-example{ background:rgba(43,69,112,0.06); border-left:3px solid var(--aizome); border-radius:0 6px 6px 0; padding:7px 10px; }
+  .gb-example .jp{ font-family:'Shippori Mincho',serif; font-size:15px; }
+  .gb-example .en{ font-size:11.5px; color:#666; }
+  .gb-mechanic{ background:rgba(92,122,75,0.08); border-left:3px solid var(--moss); border-radius:0 6px 6px 0; padding:7px 10px; }
+  .gb-mechanic .gb-tag{ color:var(--moss); }
+  .gb-empty{ color:#888; font-size:12px; font-style:italic; padding-top:60px; text-align:center; }
+  .narrate-bar input{
+    flex:1; font-family:'Zen Maru Gothic',sans-serif; font-size:13px;
+    padding:9px 14px; border-radius:20px; border:2px solid var(--sumi);
+    background:var(--card-bg); color:var(--sumi); outline:none;
+  }
+  .narrate-bar input::placeholder{ color:#999; font-style:italic; }
+  .narrate-bar input:disabled{ background:#e6e0cf; color:#999; }
+  .narrate-bar .action-btn{ flex-shrink:0; background:var(--verb); }
+  .narrate-bar .action-btn:hover{ background:#8e5aa0; }
+  .narrate-bar .action-btn:disabled{ background:#aaa; }
+  .narrate-hint{ text-align:center; font-size:10px; color:#888; margin-top:3px; }
+  .narrate-history{ display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin-top:5px; max-height:54px; overflow-y:auto; }
+  .narrate-chip{
+    font-size:10.5px; background:var(--card-bg); border:1px solid var(--verb); border-radius:12px;
+    padding:3px 10px; cursor:pointer; color:#4a3556; max-width:260px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .narrate-chip:hover{ background:#ECE0F2; }
+  .narrate-chip .turn-tag{ color:var(--verb); font-weight:700; margin-right:4px; }
+
+  .bottom-bar{ display:flex; gap:10px; margin-top:10px; align-items:flex-start; }
+  .inspector{ flex:0 0 230px; min-height:140px; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .inspector .placeholder{ font-size:12px; color:#888; text-align:center; padding-top:50px; }
+  .mnemonic-box{ font-size:10.5px; background:#fff8e8; border:1px solid var(--gold); border-radius:5px; padding:5px 7px; max-width:200px; text-align:center; color:#5a4a1c; }
+  .grammar-note{ font-size:10px; background:#eef1f8; border:1px solid var(--aizome); border-radius:5px; padding:4px 7px; max-width:200px; text-align:center; color:#2b3a55; }
+  .action-btn{ font-family:'Zen Maru Gothic',sans-serif; font-weight:700; border:2px solid var(--sumi); border-radius:20px; padding:6px 16px; background:var(--aizome); color:#fff; cursor:pointer; font-size:13px; }
+  .action-btn:hover{ background:var(--aizome-lt); }
+  .action-btn.cancel{ background:#888; }
+  .action-btn:disabled{ background:#aaa; cursor:not-allowed; }
+
+  .log{ flex:1; background:rgba(28,27,25,0.06); border:1px solid var(--sumi); border-radius:6px; height:150px; overflow-y:auto; padding:6px 10px; font-size:11.5px; line-height:1.5; }
+  .log div.turn-marker{ color:var(--vermillion); font-weight:700; margin-top:4px; }
+
+  .controls{ flex:0 0 130px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .turn-banner{ font-size:13px; font-weight:700; text-align:center; padding:4px 10px; border-radius:14px; background:var(--card-bg); border:1px solid var(--sumi); }
+  .turn-banner.player{ color:var(--aizome); }
+  .turn-banner.ai{ color:var(--vermillion); }
+
+  .overlay{ position:absolute; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; border-radius:6px; }
+  .overlay-box{ background:var(--washi); border:3px solid var(--sumi); border-radius:8px; padding:30px 40px; text-align:center; }
+  .overlay-box h2{ font-family:'Shippori Mincho',serif; font-size:28px; margin:0 0 14px; }
+  .hint{ font-size:11px; color:#777; text-align:center; margin-top:6px;}
+
+  .particle-box{ padding:20px 24px; max-width:380px; }
+  .particle-box h3{ font-family:'Shippori Mincho',serif; font-size:18px; margin:0 0 12px; text-align:center; }
+  .particle-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:12px; }
+  .particle-btn{
+    font-family:'Zen Maru Gothic',sans-serif; border:2px solid var(--sumi); border-radius:8px;
+    background:var(--card-bg); padding:8px 6px; cursor:pointer; text-align:center; position:relative;
+  }
+  .particle-btn:hover{ background:#ECE0F2; }
+  .particle-btn.disabled{ opacity:.45; cursor:not-allowed; background:#ddd; }
+  .particle-kana{ font-family:'Shippori Mincho',serif; font-weight:700; font-size:22px; color:var(--verb); }
+  .particle-desc{ font-size:10px; color:#555; margin-top:3px; line-height:1.25; }
+  .soon-tag{ position:absolute; top:2px; right:5px; font-size:8px; color:#888; font-weight:700; }
+
+  .verb-bubble{
+    position:fixed; z-index:9999; background:var(--card-bg); border:2px solid var(--sumi); border-radius:10px;
+    padding:5px 10px; font-family:'Shippori Mincho',serif; font-weight:700; font-size:15px;
+    box-shadow:0 3px 8px var(--shadow);
+  }
+  .connector-svg{ position:fixed; left:0; top:0; width:100vw; height:100vh; pointer-events:none; z-index:9998; }
+  .targeting-msg{ font-size:11px; color:var(--vermillion); font-weight:700; text-align:center; max-width:200px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ===================== CARD DATABASE ===================== */
+const NOUNS = [
+  {id:'cat', kanji:'猫', kana:'ねこ', romaji:'neko', meaning:'Cat', cost:1, type:'noun', atk:1, hp:1, icon:'🐱', keywords:['Charge'],
+    mnemonic:'猫 = the "beast" radical 犭 plus 苗 (seedling) — a small quick cat darting through seedlings.'},
+  {id:'dog', kanji:'犬', kana:'いぬ', romaji:'inu', meaning:'Dog', cost:2, type:'noun', atk:2, hp:2, icon:'🐶',
+    mnemonic:'犬 is 大 (big) plus one extra dot — a big dog with one wagging tail-dot.'},
+  {id:'bird', kanji:'鳥', kana:'とり', romaji:'tori', meaning:'Bird', cost:2, type:'noun', atk:1, hp:3, icon:'🐦'},
+  {id:'snake', kanji:'蛇', kana:'へび', romaji:'hebi', meaning:'Snake', cost:2, type:'noun', atk:2, hp:1, icon:'🐍', keywords:['Poison'],
+    mnemonic:'蛇 pairs the bug radical 虫 with 它 ("it/that") — that creepy little "it" slithering past.'},
+  {id:'stone', kanji:'石', kana:'いし', romaji:'ishi', meaning:'Stone', cost:2, type:'noun', atk:1, hp:4, icon:'🪨', keywords:['Taunt']},
+  {id:'car', kanji:'車', kana:'くるま', romaji:'kuruma', meaning:'Car', cost:3, type:'noun', atk:3, hp:3, icon:'🚗', keywords:['Charge'],
+    mnemonic:'車 is a pictograph of a cart seen from above — wheels and axle in a box.'},
+  {id:'horse', kanji:'馬', kana:'うま', romaji:'uma', meaning:'Horse', cost:3, type:'noun', atk:3, hp:2, icon:'🐴', keywords:['Charge']},
+  {id:'tree', kanji:'木', kana:'き', romaji:'ki', meaning:'Tree', cost:3, type:'noun', atk:2, hp:5, icon:'🌳', keywords:['Taunt'],
+    mnemonic:'木 is a literal pictograph: a trunk with branches reaching up, roots below.'},
+  {id:'mountain', kanji:'山', kana:'やま', romaji:'yama', meaning:'Mountain', cost:4, type:'noun', atk:0, hp:7, icon:'⛰️', keywords:['Taunt'],
+    mnemonic:'山 literally draws three mountain peaks side by side.'},
+  {id:'dragon', kanji:'龍', kana:'りゅう', romaji:'ryuu', meaning:'Dragon', cost:8, type:'noun', atk:8, hp:8, icon:'🐉',
+    mnemonic:'龍 is one of the most complex common kanji — fitting for the rarest, priciest beast in the deck.'}
+];
+
+const VERBS = [
+  {id:'run', kanji:'走る', kana:'はしる', romaji:'hashiru', meaning:'to run', cost:1, type:'verb', mode:'subject',
+    scene:['🏃','🚌'], caption:'Running to catch the bus before it leaves.',
+    effectText:'Subject gets an extra attack this turn.', effectId:'run',
+    mnemonic:'走 stacks 土 (ground) over 止 (stop) — feet pounding the ground, refusing to stop.'},
+  {id:'fly', kanji:'飛ぶ', kana:'とぶ', romaji:'tobu', meaning:'to fly', cost:2, type:'verb', mode:'subject',
+    scene:['✈️','🪟'], caption:'Looking out the window during a flight.',
+    effectText:'Subject gains Flying (ignores Taunt when attacking).', effectId:'fly'},
+  {id:'eat', kanji:'食べる', kana:'たべる', romaji:'taberu', meaning:'to eat', cost:3, type:'verb', mode:'transitive', objectFilter:'enemy',
+    scene:['🍜','😋'], caption:'Slurping down a bowl of ramen after work.',
+    effectText:'Subject "eats" an enemy Object: deals (ATK+2) damage to it, doubled if boosted; if it dies, Subject permanently +1/+1.',
+    effectId:'eat', mnemonic:'食 itself is a pictograph of a covered food vessel.'},
+  {id:'destroy', kanji:'壊す', kana:'こわす', romaji:'kowasu', meaning:'to destroy', cost:5, type:'verb', mode:'transitive', objectFilter:'enemy',
+    scene:['🔨','📦'], caption:'Smashing a cardboard box while moving apartments.',
+    effectText:'Subject destroys an enemy Object outright.', effectId:'destroy'},
+  {id:'heal', kanji:'治す', kana:'なおす', romaji:'naosu', meaning:'to heal', cost:3, type:'verb', mode:'subject',
+    scene:['🩺','🏠'], caption:"A doctor's home visit after catching a cold.",
+    effectText:"Restore Health to your hero equal to Subject's current HP (doubled if boosted).", effectId:'heal'},
+  {id:'drink', kanji:'飲む', kana:'のむ', romaji:'nomu', meaning:'to drink', cost:1, type:'verb', mode:'subject',
+    scene:['🥤','🏃‍♀️'], caption:'Drinking water after a jog in the park.',
+    effectText:'Restore 2 Health to your hero (doubled if boosted).', effectId:'drink',
+    mnemonic:'飲 pairs the "eating" radical 食 with 欠 (lack) — quenching a lack of water.'},
+  {id:'blow', kanji:'吹く', kana:'ふく', romaji:'fuku', meaning:'to blow', cost:1, type:'verb', mode:'subject',
+    scene:['🍃','📄'], caption:'A gust of wind scatters papers off the desk.',
+    effectText:'Draw a card (2 cards if boosted).', effectId:'blow'},
+  {id:'thunder', kanji:'雷が落ちる', kana:'かみなりがおちる', romaji:'kaminari ga ochiru', meaning:'lightning strikes', cost:4, type:'verb', mode:'none',
+    scene:['⛈️','🏙️'], caption:'A summer thunderstorm rolling over the city.',
+    effectText:'Deal 4 damage to all enemy Objects.', effectId:'thunder'}
+];
+
+const ADJECTIVES = [
+  {id:'strong', kanji:'強い', kana:'つよい', romaji:'tsuyoi', meaning:'strong', cost:2, type:'adjective', icon:'💪',
+    effectText:'Subject +1/+1 permanently. The next Verb cast on Subject this turn has doubled effect.', effectId:'strong'},
+  {id:'fast', kanji:'速い', kana:'はやい', romaji:'hayai', meaning:'fast', cost:1, type:'adjective', icon:'⚡',
+    effectText:'Subject is ready to attack immediately, plus one extra attack this turn.', effectId:'fast'},
+  {id:'big', kanji:'大きい', kana:'おおきい', romaji:'ookii', meaning:'big', cost:3, type:'adjective', icon:'📏',
+    effectText:'Subject +3/+3 permanently.', effectId:'big',
+    mnemonic:'大 is a person 人 with arms stretched wide — as big as you can spread them.'}
+];
+
+const EMOTIONS = [
+  {id:'happy', kanji:'嬉しい', kana:'うれしい', romaji:'ureshii', meaning:'happy', cost:1, type:'emotion', icon:'😊', target:'none',
+    effectText:'Restore 2 Health to your hero.', effectId:'happy'},
+  {id:'sad', kanji:'悲しい', kana:'かなしい', romaji:'kanashii', meaning:'sad', cost:2, type:'emotion', icon:'😢', target:'none',
+    effectText:'Draw a card, but lose 1 Health.', effectId:'sad'},
+  {id:'angry', kanji:'怒る', kana:'おこる', romaji:'okoru', meaning:'to get angry', cost:3, type:'emotion', icon:'😠', target:'none',
+    effectText:'Deal 2 damage directly to the enemy hero.', effectId:'angry'},
+  {id:'scared', kanji:'怖い', kana:'こわい', romaji:'kowai', meaning:'scared', cost:2, type:'emotion', icon:'😨', target:'enemy',
+    effectText:"Target enemy Object can't attack next turn.", effectId:'scared'},
+  {id:'fun', kanji:'楽しい', kana:'たのしい', romaji:'tanoshii', meaning:'fun', cost:2, type:'emotion', icon:'😄', target:'none',
+    effectText:'Draw 2 cards.', effectId:'fun'},
+  {id:'surprised', kanji:'驚く', kana:'おどろく', romaji:'odoroku', meaning:'to be surprised', cost:1, type:'emotion', icon:'😲', target:'none',
+    effectText:"Reveal the size of the opponent's hand and the top card of their deck.", effectId:'surprised'},
+  {id:'like', kanji:'好き', kana:'すき', romaji:'suki', meaning:'to like', cost:2, type:'emotion', icon:'❤️', target:'friendly',
+    effectText:'Target friendly Object +1/+1 permanently.', effectId:'like'},
+  {id:'dislike', kanji:'嫌い', kana:'きらい', romaji:'kirai', meaning:'to dislike', cost:2, type:'emotion', icon:'💢', target:'enemy',
+    effectText:'Target enemy Object -2/-0.', effectId:'dislike'},
+  {id:'relief', kanji:'安心', kana:'あんしん', romaji:'anshin', meaning:'relief', cost:3, type:'emotion', icon:'😌', target:'none',
+    effectText:'Restore 5 Health to your hero.', effectId:'relief'},
+  {id:'nervous', kanji:'緊張', kana:'きんちょう', romaji:'kinchou', meaning:'nervousness', cost:1, type:'emotion', icon:'😬', target:'none',
+    effectText:'Your hero gains a 2-point Shield (absorbs the next 2 damage) until your next turn.', effectId:'nervous'}
+];
+
+const CARD_DB = [...NOUNS, ...VERBS, ...ADJECTIVES, ...EMOTIONS];
+
+/* Grammar techniques — JLPT N5 patterns (pattern list per hanabira.org, CC BY-SA; mechanics are this game's own interpretation) */
+const GRAMMAR_PATTERNS = [
+  {id:'naru', jp:'〜になります', romaji:'ni narimasu', gloss:'to become', cost:3, need:['friendly'],
+    desc:'One of your Objects transforms — it becomes a random Object of the next cost tier up.'},
+  {id:'tai', jp:'〜たいです', romaji:'tai desu', gloss:'want to do', cost:1, need:[],
+    desc:'Desire summons the means: pull the first Verb from your deck into your hand.'},
+  {id:'teiru', jp:'〜ています', romaji:'te imasu', gloss:'continuous state', cost:2, need:['friendly'],
+    desc:'An Object keeps at it: gains +1/+1 at the start of each of your turns.'},
+  {id:'dekiru', jp:'〜ことができます', romaji:'koto ga dekimasu', gloss:'can do', cost:2, need:['friendly'],
+    desc:'Capability: one of your Objects can act again (+1 attack use this turn).'},
+  {id:'yori', jp:'AはBより〜', romaji:'A wa B yori', gloss:'A more than B', cost:2, need:['friendly','enemy'],
+    desc:'Comparison: your Object rises to surpass an enemy — its ATK becomes 1 higher than theirs (if lower).'}
+];
+
+/* ===================== 図鑑 GUIDEBOOK — the textbook that reads as a game guide =====================
+   Each entry: the real grammar explanation (textbook), a natural example, and its game mechanic.
+   Levels N4+ include designed-but-not-yet-playable entries, marked status:'soon'. */
+const GUIDEBOOK = [
+  // ---------- N5 ----------
+  {level:'N5', jp:'が', romaji:'ga', gloss:'subject marker',
+   textbook:'Marks the grammatical subject — the one performing the action, especially when introducing new information.',
+   example:{jp:'猫が走る。', en:'The cat runs.'},
+   mechanic:'When you play a Verb, choosing が makes your selected Object simply perform it. The dashed line connector shows subject → verb.', status:'live'},
+  {level:'N5', jp:'を', romaji:'o', gloss:'direct object marker',
+   textbook:'Marks the direct object — the thing the action is done to. Only transitive verbs take を.',
+   example:{jp:'猫が魚を食べる。', en:'The cat eats the fish.'},
+   mechanic:'Choosing を on a transitive Verb (食べる, 壊す) lets your subject act on an enemy Object. Shown as a circle around the subject linked to the verb.', status:'live'},
+  {level:'N5', jp:'に', romaji:'ni', gloss:'target / direction',
+   textbook:'Marks a target, destination, or direction of an action — "to" or "at."',
+   example:{jp:'犬が敵に走る。', en:'The dog runs at the enemy.'},
+   mechanic:'Choosing に redirects the action at the enemy hero for direct damage. Shown as a double-line arrow.', status:'live'},
+  {level:'N5', jp:'で', romaji:'de', gloss:'means / instrument',
+   textbook:'Marks the means by which an action is done — "by" or "with." 車で行く = go by car.',
+   example:{jp:'犬が車で走る。', en:'The dog runs by car.'},
+   mechanic:'Designed: use a second Object as a tool — its stats amplify the verb instead of it acting itself.', status:'soon'},
+  {level:'N5', jp:'と', romaji:'to', gloss:'together with',
+   textbook:'Marks a companion — doing something together with someone.',
+   example:{jp:'猫と犬が食べる。', en:'The cat and dog eat together.'},
+   mechanic:'Designed: two of your Objects perform one verb jointly, combining their ATK for its effect.', status:'soon'},
+  {level:'N5', jp:'い・な形容詞', romaji:'i / na adjectives', gloss:'adjectives',
+   textbook:'Adjectives modify nouns directly (強い猫 = a strong cat) and can also intensify how actions unfold.',
+   example:{jp:'強い猫が走る。', en:'The strong cat runs.'},
+   mechanic:'Adjective cards attach to your Objects: 強い gives +1/+1 and doubles the next Verb; 大きい gives +3/+3; 速い grants an extra attack.', status:'live'},
+  {level:'N5', jp:'私は〜（感情）', romaji:'watashi wa ~ (emotions)', gloss:'feelings as predicates',
+   textbook:'Emotion words describe the speaker\'s state: 私は嬉しい = I am happy. The subject is the speaker, not an object.',
+   example:{jp:'私は嬉しい。', en:'I am happy.'},
+   mechanic:'Emotion cards are sentences about your hero — they heal, shield, draw, or express feelings toward a specific Object (好き / 嫌い / 怖い).', status:'live'},
+  {level:'N5', jp:'〜たいです', romaji:'~tai desu', gloss:'want to do',
+   textbook:'Attach たい to a verb stem to express desire: 食べたい = want to eat.',
+   example:{jp:'私は走りたい。', en:'I want to run.'},
+   mechanic:'Grammar technique: desire summons the means — pull the first Verb from your deck into hand.', status:'live'},
+  {level:'N5', jp:'〜ています', romaji:'~te imasu', gloss:'continuous state',
+   textbook:'The て-form + いる expresses an ongoing action or continuing state: 走っている = is running.',
+   example:{jp:'猫は訓練している。', en:'The cat is training.'},
+   mechanic:'Grammar technique: mark an Object as continuous — it gains +1/+1 at the start of each of your turns.', status:'live'},
+  {level:'N5', jp:'〜ことができます', romaji:'~koto ga dekimasu', gloss:'can do',
+   textbook:'Verb dictionary form + ことができる expresses ability or possibility.',
+   example:{jp:'猫は攻撃することができる。', en:'The cat can attack.'},
+   mechanic:'Grammar technique: capability — one of your Objects gains an extra attack use this turn.', status:'live'},
+  {level:'N5', jp:'AはBより〜', romaji:'A wa B yori', gloss:'A is more ~ than B',
+   textbook:'より marks the standard of comparison: 猫は犬より速い = the cat is faster than the dog.',
+   example:{jp:'猫は犬より強い。', en:'The cat is stronger than the dog.'},
+   mechanic:'Grammar technique: comparison — your Object\'s ATK rises to 1 above a chosen enemy\'s (if currently lower).', status:'live'},
+  {level:'N5', jp:'〜になります', romaji:'~ni narimasu', gloss:'to become',
+   textbook:'Noun/adjective + になる expresses change of state: 医者になる = become a doctor.',
+   example:{jp:'猫は龍になった。', en:'The cat became a dragon.'},
+   mechanic:'Grammar technique: transformation — an Object becomes a random Object of the next cost tier up.', status:'live'},
+
+  // ---------- N4 ----------
+  {level:'N4', jp:'〜て、〜て（て形接続）', romaji:'te-form chaining', gloss:'and then… (sequence)',
+   textbook:'The て-form links actions in sequence within one sentence: 食べて、走って、寝た = ate, ran, then slept.',
+   example:{jp:'猫が食べて、走って、飛んだ。', en:'The cat ate, ran, and flew.'},
+   mechanic:'Designed — COMBO SYSTEM: chain multiple Verbs in one sentence; each chained verb costs 1 less, but the chain fizzles if any link\'s target dies mid-chain.', status:'soon'},
+  {level:'N4', jp:'〜たら／〜ば', romaji:'~tara / ~ba', gloss:'if / when (conditional)',
+   textbook:'Conditionals: 攻撃したら = if/when (they) attack. States a condition and its consequence.',
+   example:{jp:'敵が攻撃したら、猫が反撃する。', en:'If the enemy attacks, the cat strikes back.'},
+   mechanic:'Designed — TRAP CARDS: set a hidden condition with a face-down 条件 marker; it triggers automatically on the enemy\'s action.', status:'soon'},
+  {level:'N4', jp:'受身形（〜られる）', romaji:'passive form', gloss:'is done to',
+   textbook:'The passive shifts perspective to the receiver: 猫は犬に食べられた = the cat was eaten by the dog.',
+   example:{jp:'犬は猫に見られた。', en:'The dog was seen by the cat.'},
+   mechanic:'Designed — REDIRECT: force the enemy\'s next verb or attack onto a target of your choice.', status:'soon'},
+  {level:'N4', jp:'使役形（〜させる）', romaji:'causative form', gloss:'make/let someone do',
+   textbook:'The causative expresses making or letting someone act: 走らせる = make (someone) run.',
+   example:{jp:'私は敵の犬を走らせた。', en:'I made the enemy\'s dog run.'},
+   mechanic:'Designed — CONTROL: make an enemy Object perform one of your Verbs. Expensive, dramatic.', status:'soon'},
+  {level:'N4', jp:'〜ながら', romaji:'~nagara', gloss:'while doing',
+   textbook:'Attaches to a verb stem to express two simultaneous actions by the same subject.',
+   example:{jp:'猫は走りながら食べる。', en:'The cat eats while running.'},
+   mechanic:'Designed: an Object attacks AND performs a verb in the same turn.', status:'soon'},
+  {level:'N4', jp:'〜たことがあります', romaji:'~ta koto ga arimasu', gloss:'have done before',
+   textbook:'Past experience: 食べたことがある = have eaten (before).',
+   example:{jp:'猫は飛んだことがある。', en:'The cat has flown before.'},
+   mechanic:'Designed — RECURSION: replay the effect of a Verb you used earlier this game.', status:'soon'},
+
+  // ---------- N3 ----------
+  {level:'N3', jp:'〜ようになる', romaji:'~you ni naru', gloss:'come to be able to',
+   textbook:'Expresses gradual change toward a new ability or habit.',
+   example:{jp:'猫は飛べるようになった。', en:'The cat became able to fly.'},
+   mechanic:'Designed: delayed transformation — choose now, the upgrade lands in 2 turns with a bigger payoff.', status:'soon'},
+  {level:'N3', jp:'〜うちに', romaji:'~uchi ni', gloss:'while (a state) lasts',
+   textbook:'Do something before a current state ends: 熱いうちに食べて = eat it while it\'s hot.',
+   example:{jp:'敵が凍っているうちに攻撃する。', en:'Attack while the enemy is frozen.'},
+   mechanic:'Designed — TIMING WINDOW: a bonus effect that only applies while a stated condition holds.', status:'soon'},
+  {level:'N3', jp:'〜ばかり', romaji:'~bakari', gloss:'just did / nothing but',
+   textbook:'Indicates something just happened or is done repeatedly to excess.',
+   example:{jp:'猫は食べたばかりだ。', en:'The cat has just eaten.'},
+   mechanic:'Designed — ECHO: repeat your most recent Verb at half effect.', status:'soon'},
+  {level:'N3', jp:'〜てしまう', romaji:'~te shimau', gloss:'completely / regrettably',
+   textbook:'Expresses completion, often with finality or regret: 食べてしまった = ate it all up.',
+   example:{jp:'龍は山を壊してしまった。', en:'The dragon completely destroyed the mountain.'},
+   mechanic:'Designed — FINISHER: a destroy effect so total the card is exiled from your game afterward.', status:'soon'},
+
+  // ---------- N2 ----------
+  {level:'N2', jp:'〜にもかかわらず', romaji:'~nimo kakawarazu', gloss:'despite',
+   textbook:'Formal concessive: despite X, Y happens anyway.',
+   example:{jp:'凍っているにもかかわらず、猫は動いた。', en:'Despite being frozen, the cat moved.'},
+   mechanic:'Designed: ignore one negative condition this turn — frozen Objects act anyway.', status:'soon'},
+  {level:'N2', jp:'〜ばかりか', romaji:'~bakari ka', gloss:'not only… but also',
+   textbook:'Escalation: not only A, but even B.',
+   example:{jp:'猫ばかりか、犬も強くなった。', en:'Not only the cat — the dog got stronger too.'},
+   mechanic:'Designed: your next effect also applies to one additional target.', status:'soon'},
+
+  // ---------- N1 ----------
+  {level:'N1', jp:'〜んがために', romaji:'~n ga tame ni', gloss:'for the sake of (literary)',
+   textbook:'Literary purpose form — archaic flavor, strong determination.',
+   example:{jp:'勝たんがために、すべてを賭ける。', en:'To win, one stakes everything.'},
+   mechanic:'Sketched — LEGENDARY tier: one-per-deck techniques with game-warping effects. Earned, not given.', status:'soon'}
+];
+
+/* ===================== STATE ===================== */
+let guidebookUI = {open:false, level:'N5', entryIdx:null}; // outside S: survives Play Again
+let nextInstanceId = 1;
+let dragCtx = null; // {idx, cardEl, startX, startY, started, ghost, offsetX, offsetY}
+function computeInsertIndex(clientX, fieldEl){
+  const cards = Array.from(fieldEl.querySelectorAll('[data-iid]'));
+  for(let i=0;i<cards.length;i++){
+    const r = cards[i].getBoundingClientRect();
+    if(clientX < r.left + r.width/2) return i;
+  }
+  return cards.length;
+}
+function placeNounAt(idx, insertIdx){
+  const card = S.playerHand[idx];
+  if(!card || card.type!=='noun') return;
+  if(S.turn!=='player' || S.over) return;
+  if(card.cost>S.playerMana) return;
+  if(S.playerBoard.length>=7){ logMsg('Your board is full (7 max).'); render(); return; }
+  S.playerHand.splice(idx,1);
+  S.playerMana -= card.cost;
+  card.attacksLeft = card.keywords.includes('Charge')?1:0;
+  const at = Math.max(0, Math.min(insertIdx, S.playerBoard.length));
+  S.playerBoard.splice(at,0,card);
+  logMsg(`You play 「${card.kanji}」 (${card.meaning}).`);
+  S.pending=null; S.inspect=null;
+  cleanupBoards();
+  render();
+}
+function dragKindFor(card){
+  if(!card) return null;
+  if(card.type==='noun') return 'place';
+  if(card.type==='adjective') return 'target';
+  if(card.type==='verb' && card.mode==='subject') return 'target';
+  return null; // transitive verbs (need 2 targets) and weather verbs (need none) stay click-only
+}
+function onHandPointerDown(e, idx, cardEl){
+  if(e.button !== undefined && e.button !== 0) return;
+  if(cardEl.dataset.draggable !== '1') return;
+  const kind = dragKindFor(S.playerHand[idx]);
+  if(!kind) return;
+  dragCtx = {idx, cardEl, kind, startX:e.clientX, startY:e.clientY, started:false, hoverEl:null};
+  document.addEventListener('pointermove', onHandPointerMove);
+  document.addEventListener('pointerup', onHandPointerUp);
+}
+function onHandPointerMove(e){
+  if(!dragCtx) return;
+  const dx = e.clientX-dragCtx.startX, dy = e.clientY-dragCtx.startY;
+  if(!dragCtx.started){
+    if(Math.hypot(dx,dy) < 6) return;
+    dragCtx.started = true;
+    const rect = dragCtx.cardEl.getBoundingClientRect();
+    const ghost = dragCtx.cardEl.cloneNode(true);
+    ghost.className += ' ghost-card';
+    ghost.style.left = rect.left+'px'; ghost.style.top = rect.top+'px';
+    ghost.style.width = rect.width+'px'; ghost.style.height = rect.height+'px';
+    ghost.style.margin = '0'; ghost.style.transform = 'rotate(-4deg) scale(1.06)';
+    document.body.appendChild(ghost);
+    dragCtx.ghost = ghost;
+    dragCtx.offsetX = dragCtx.startX-rect.left; dragCtx.offsetY = dragCtx.startY-rect.top;
+    dragCtx.cardEl.style.opacity = '0.25';
+    if(dragCtx.kind==='target'){
+      document.querySelectorAll('#playerField [data-iid]').forEach(el=>el.classList.add('targetable'));
+    }
+  }
+  dragCtx.ghost.style.left = (e.clientX-dragCtx.offsetX)+'px';
+  dragCtx.ghost.style.top = (e.clientY-dragCtx.offsetY)+'px';
+
+  if(dragCtx.kind==='place'){
+    const fieldEl = document.getElementById('playerField');
+    if(fieldEl){
+      const r = fieldEl.getBoundingClientRect();
+      const over = e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+      fieldEl.classList.toggle('drag-over', over);
+    }
+  } else if(dragCtx.kind==='target'){
+    const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+    const cardUnder = elUnder ? elUnder.closest('#playerField [data-iid]') : null;
+    if(dragCtx.hoverEl && dragCtx.hoverEl!==cardUnder) dragCtx.hoverEl.classList.remove('drop-hover');
+    if(cardUnder) cardUnder.classList.add('drop-hover');
+    dragCtx.hoverEl = cardUnder;
+  }
+  e.preventDefault();
+}
+function onHandPointerUp(e){
+  document.removeEventListener('pointermove', onHandPointerMove);
+  document.removeEventListener('pointerup', onHandPointerUp);
+  if(!dragCtx) return;
+  const {idx, started, ghost, cardEl, kind} = dragCtx;
+  if(started){
+    ghost.remove();
+    cardEl.style.opacity = '';
+    if(kind==='place'){
+      const fieldEl = document.getElementById('playerField');
+      if(fieldEl){
+        const r = fieldEl.getBoundingClientRect();
+        const over = e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+        fieldEl.classList.remove('drag-over');
+        if(over){
+          const insertIdx = computeInsertIndex(e.clientX, fieldEl);
+          placeNounAt(idx, insertIdx);
+        }
+      }
+    } else if(kind==='target'){
+      document.querySelectorAll('#playerField [data-iid]').forEach(el=>el.classList.remove('targetable','drop-hover'));
+      const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+      const cardUnder = elUnder ? elUnder.closest('#playerField [data-iid]') : null;
+      if(cardUnder){
+        const minion = S.playerBoard.find(m=>m.iid===cardUnder.dataset.iid && m.curHp>0);
+        const card = S.playerHand[idx];
+        if(minion && card && card.cost<=S.playerMana){
+          if(card.type==='adjective'){
+            S.playerHand.splice(idx,1); S.playerMana -= card.cost;
+            applyAdjective(card,'player',minion);
+          } else if(card.type==='verb'){
+            S.particlePicker = {idxInHand: idx, card, subjectIid: minion.iid, options: computeParticleOptions(card)};
+          }
+          S.pending=null; S.inspect=null;
+          render();
+        }
+      }
+    }
+  }
+  dragCtx = null;
+}
+function makeInstance(tpl){
+  const inst = Object.assign({}, tpl, {iid:'c'+(nextInstanceId++)});
+  inst.keywords = (tpl.keywords||[]).slice();
+  if(tpl.type==='noun'){
+    inst.curAtk = tpl.atk; inst.curHp = tpl.hp; inst.maxHp = tpl.hp;
+    inst.attacksLeft = inst.keywords.includes('Charge') ? 1 : 0;
+    inst.nextVerbBoost = false;
+  }
+  return inst;
+}
+function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+function buildDeck(){ return shuffle(CARD_DB.map(makeInstance)); }
+
+let S = null;
+function newGame(){
+  S = {
+    turn:'player', turnNumber:1,
+    playerHp:25, aiHp:25, playerShield:0, aiShield:0,
+    playerMaxMana:0, playerMana:0, aiMaxMana:0, aiMana:0,
+    playerFatigue:0, aiFatigue:0,
+    playerDeck: buildDeck(), aiDeck: buildDeck(),
+    playerHand:[], aiHand:[], playerBoard:[], aiBoard:[],
+    pending:null, inspect:null, over:null, log:[], narrateLoading:false, narrationHistory:[], particlePicker:null, grammarUsed:false
+  };
+  for(let i=0;i<4;i++){ drawCard('player'); drawCard('ai'); }
+  startTurn('player');
+}
+
+function logMsg(text, marker){ S.log.push({text, marker}); if(S.log.length>200) S.log.shift(); }
+
+function drawCard(side){
+  const deck = side==='player'? S.playerDeck : S.aiDeck;
+  const hand = side==='player'? S.playerHand : S.aiHand;
+  if(deck.length===0){
+    if(side==='player'){ S.playerFatigue++; S.playerHp -= S.playerFatigue; logMsg(`You have no cards left! Fatigue deals ${S.playerFatigue} damage.`); }
+    else { S.aiFatigue++; S.aiHp -= S.aiFatigue; logMsg(`Opponent's deck is empty! Fatigue deals ${S.aiFatigue} damage.`); }
+    checkGameOver(); return;
+  }
+  if(hand.length>=10){ deck.shift(); return; }
+  hand.push(deck.shift());
+}
+
+function startTurn(side){
+  S.turn = side; S.pending = null;
+  const board = side==='player'? S.playerBoard : S.aiBoard;
+  board.forEach(m=>{
+    if(m.frozen){ m.attacksLeft = 0; m.frozen = false; }
+    else { m.attacksLeft = 1; }
+    m.nextVerbBoost = false;
+    if(m.training){ m.curAtk+=1; m.curHp+=1; m.maxHp+=1; logMsg(`「${m.kanji}」 は続けています (keeps at it) — +1/+1.`); }
+  });
+  if(side==='player') S.grammarUsed = false;
+  if(side==='player'){
+    S.playerMaxMana = Math.min(10, S.playerMaxMana+1); S.playerMana = S.playerMaxMana;
+    S.playerShield = 0;
+    drawCard('player'); logMsg(`— Your turn ${S.turnNumber} —`, true);
+  } else {
+    S.aiMaxMana = Math.min(10, S.aiMaxMana+1); S.aiMana = S.aiMaxMana;
+    S.aiShield = 0;
+    drawCard('ai'); logMsg(`— Opponent's turn ${S.turnNumber} —`, true);
+  }
+  checkGameOver();
+}
+
+function endPlayerTurn(){
+  if(S.over || S.turn!=='player') return;
+  S.pending = null; render();
+  setTimeout(()=>{ aiTurn(); }, 350);
+}
+
+/* ===================== HELPERS ===================== */
+function friendlyBoard(side){ return side==='player'? S.playerBoard : S.aiBoard; }
+function enemyBoard(side){ return side==='player'? S.aiBoard : S.playerBoard; }
+function healHero(side, amt){ if(side==='player'){ S.playerHp=Math.min(25,S.playerHp+amt); } else { S.aiHp=Math.min(25,S.aiHp+amt); } }
+function damageHero(side, amt){
+  // side = whose hero is being damaged
+  let shieldKey = side==='player' ? 'playerShield' : 'aiShield';
+  let absorbed = Math.min(S[shieldKey], amt);
+  S[shieldKey] -= absorbed;
+  const remaining = amt - absorbed;
+  if(side==='player') S.playerHp -= remaining; else S.aiHp -= remaining;
+  return {absorbed, remaining};
+}
+function computeNeed(card){
+  // Player flow: a verb's secondary target (if any) is decided by the particle picker, not the card itself.
+  if(card.type==='adjective') return ['friendly'];
+  if(card.type==='verb'){
+    if(card.mode==='none') return [];
+    return ['friendly'];
+  }
+  if(card.type==='emotion'){
+    if(card.target==='enemy') return ['enemy'];
+    if(card.target==='friendly') return ['friendly'];
+    return [];
+  }
+  return [];
+}
+function aiNeedFor(card){
+  if(card.type==='adjective') return ['friendly'];
+  if(card.type==='verb'){
+    if(card.mode==='none') return [];
+    if(card.mode==='subject') return ['friendly'];
+    if(card.mode==='transitive') return ['friendly', card.objectFilter];
+  }
+  if(card.type==='emotion'){
+    if(card.target==='enemy') return ['enemy'];
+    if(card.target==='friendly') return ['friendly'];
+    return [];
+  }
+  return [];
+}
+function hasLegalTargets(card, side){
+  if(card.type==='noun') return true;
+  if(card.type==='adjective') return friendlyBoard(side).some(m=>m.curHp>0);
+  if(card.type==='emotion'){
+    if(card.target==='enemy') return enemyBoard(side).some(m=>m.curHp>0);
+    if(card.target==='friendly') return friendlyBoard(side).some(m=>m.curHp>0);
+    return true;
+  }
+  if(card.mode==='none') return true;
+  if(card.mode==='subject') return friendlyBoard(side).some(m=>m.curHp>0);
+  if(card.mode==='transitive') return friendlyBoard(side).some(m=>m.curHp>0) && enemyBoard(side).some(m=>m.curHp>0);
+  return true;
+}
+
+/* ===================== EFFECTS ===================== */
+function findBoardByIid(board, iid){ return board.find(m=>m.iid===iid && m.curHp>0); }
+
+const PARTICLE_LABELS = {ga:'が', wo:'を', ni:'に', de:'で', to:'と'};
+
+function computeParticleOptions(card){
+  const opts = [{id:'ga', label:'が', desc:'The subject performs the action as usual.', enabled:true}];
+  if(card.mode==='transitive'){
+    opts.push({id:'wo', label:'を', desc:'Acts on an enemy Object — pick it next.', enabled:true});
+    opts.push({id:'ni', label:'に', desc:'Strikes the enemy hero directly instead.', enabled:true});
+  } else if(card.mode==='subject' && (card.id==='run' || card.id==='fly')){
+    opts.push({id:'ni', label:'に', desc:'Dashes at the enemy hero for direct damage.', enabled:true});
+  }
+  opts.push({id:'de', label:'で', desc:'Use a second Object as a tool. (soon)', enabled:false});
+  opts.push({id:'to', label:'と', desc:'Act together with a second Object. (soon)', enabled:false});
+  return opts;
+}
+
+function applyVerbNi(card, side, subject){
+  const boosted = !!(subject && subject.nextVerbBoost);
+  if(subject) subject.nextVerbBoost = false;
+  const who = side==='player' ? 'You' : 'Opponent';
+  let dmg = subject.curAtk;
+  if(card.effectId==='destroy') dmg = subject.curAtk*2;
+  if(card.effectId==='eat') dmg = subject.curAtk+2;
+  if(boosted) dmg *= 2;
+  const oppSide = side==='player' ? 'ai' : 'player';
+  const res = damageHero(oppSide, dmg);
+  logMsg(`${who} send 「${subject.kanji}」 ${card.kanji} に (at) the enemy hero — ${res.remaining} damage${res.absorbed?` (${res.absorbed} absorbed by Shield)`:''}.`);
+  checkGameOver();
+}
+
+function showConnectorEffect(subjectIid, particle, verbKanji){
+  const subjEl = document.querySelector(`[data-iid="${subjectIid}"]`);
+  if(!subjEl) return;
+  const rect = subjEl.getBoundingClientRect();
+  const bubble = document.createElement('div');
+  bubble.className = 'verb-bubble';
+  bubble.textContent = verbKanji;
+  bubble.style.left = (rect.left + rect.width/2 - 22) + 'px';
+  bubble.style.top = (rect.top - 46) + 'px';
+  document.body.appendChild(bubble);
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS,'svg');
+  svg.setAttribute('class','connector-svg');
+  const x1 = rect.left+rect.width/2, y1 = rect.top-16;
+  const x2 = rect.left+rect.width/2, y2 = rect.top+rect.height/2;
+
+  if(particle==='wo'){
+    const circle = document.createElementNS(svgNS,'circle');
+    circle.setAttribute('cx',x2); circle.setAttribute('cy',y2);
+    circle.setAttribute('r', Math.max(rect.width,rect.height)/1.7);
+    circle.setAttribute('fill','none'); circle.setAttribute('stroke','var(--verb)'); circle.setAttribute('stroke-width','3');
+    svg.appendChild(circle);
+    const line = document.createElementNS(svgNS,'line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1); line.setAttribute('x2',x2); line.setAttribute('y2',y2 - rect.height/1.7);
+    line.setAttribute('stroke','var(--verb)'); line.setAttribute('stroke-width','3');
+    svg.appendChild(line);
+  } else if(particle==='ni'){
+    [-4,4].forEach(off=>{
+      const line = document.createElementNS(svgNS,'line');
+      line.setAttribute('x1', x1+off); line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2+off); line.setAttribute('y2', y2-12);
+      line.setAttribute('stroke', 'var(--vermillion)'); line.setAttribute('stroke-width','2.5');
+      svg.appendChild(line);
+    });
+    const head = document.createElementNS(svgNS,'polygon');
+    head.setAttribute('points', `${x2-9},${y2-16} ${x2+9},${y2-16} ${x2},${y2}`);
+    head.setAttribute('fill','var(--vermillion)');
+    svg.appendChild(head);
+  } else { // 'ga' default
+    const line = document.createElementNS(svgNS,'line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1); line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+    line.setAttribute('stroke','var(--aizome)'); line.setAttribute('stroke-width','2'); line.setAttribute('stroke-dasharray','4,3');
+    svg.appendChild(line);
+    const dot = document.createElementNS(svgNS,'circle');
+    dot.setAttribute('cx',x2); dot.setAttribute('cy',y2); dot.setAttribute('r','4'); dot.setAttribute('fill','var(--aizome)');
+    svg.appendChild(dot);
+  }
+  document.body.appendChild(svg);
+  setTimeout(()=>{ bubble.remove(); svg.remove(); }, 1300);
+}
+
+function chooseParticle(particleId){
+  if(!S.particlePicker) return;
+  const {idxInHand, card, subjectIid} = S.particlePicker;
+  const subject = findBoardByIid(S.playerBoard, subjectIid);
+  if(!subject){ S.particlePicker=null; render(); return; }
+  if(particleId==='wo' && card.mode==='transitive'){
+    S.pending = {type:'targeting', need:['enemy'], card, idxInHand, picks:[subject], particle:'wo'};
+    S.particlePicker = null;
+    render(); return;
+  }
+  S.playerHand.splice(idxInHand,1); S.playerMana -= card.cost;
+  if(particleId==='ga'){ applyVerb(card,'player',subject,null); }
+  else if(particleId==='ni'){ applyVerbNi(card,'player',subject); }
+  showConnectorEffect(subjectIid, particleId, card.kanji);
+  S.particlePicker = null;
+  render();
+}
+function cancelParticle(){ S.particlePicker = null; render(); }
+
+function applyVerb(card, side, subject, object){
+  const boosted = !!(subject && subject.nextVerbBoost);
+  if(subject) subject.nextVerbBoost = false;
+  const who = side==='player' ? 'You' : 'Opponent';
+  switch(card.effectId){
+    case 'run':
+      subject.attacksLeft = (subject.attacksLeft||0) + (boosted?2:1);
+      logMsg(`${who} make 「${subject.kanji}」 走る (run) — extra attack gained.`); break;
+    case 'fly':
+      if(!subject.keywords.includes('Flying')) subject.keywords.push('Flying');
+      logMsg(`${who} make 「${subject.kanji}」 飛ぶ (fly) — it gains Flying.`); break;
+    case 'eat': {
+      let dmg = subject.curAtk + 2; if(boosted) dmg *= 2;
+      object.curHp -= dmg;
+      let grew = '';
+      if(object.curHp<=0){ subject.curAtk+=1; subject.curHp+=1; subject.maxHp+=1; grew=' and grows +1/+1'; }
+      logMsg(`${who} make 「${subject.kanji}」 食べる (eat) 「${object.kanji}」 for ${dmg}${grew}.`); break;
+    }
+    case 'destroy':
+      object.curHp = -999;
+      logMsg(`${who} make 「${subject.kanji}」 壊す (destroy) 「${object.kanji}」.`); break;
+    case 'heal': {
+      let amt = subject.curHp; if(boosted) amt*=2;
+      healHero(side, amt);
+      logMsg(`${who} make 「${subject.kanji}」 治す (heal) — restore ${amt}.`); break;
+    }
+    case 'drink': {
+      let amt = 2; if(boosted) amt*=2;
+      healHero(side, amt);
+      logMsg(`${who} make 「${subject.kanji}」 飲む (drink) — restore ${amt}.`); break;
+    }
+    case 'blow': {
+      let n = boosted?2:1; for(let i=0;i<n;i++) drawCard(side);
+      logMsg(`${who} make 「${subject.kanji}」 吹く (blow) — drew ${n}.`); break;
+    }
+    case 'thunder': {
+      const board = enemyBoard(side);
+      board.forEach(m=>{ if(m.curHp>0) m.curHp -= 4; });
+      logMsg(`${who} invoke 雷が落ちる (lightning strikes) — 4 damage to all enemy Objects.`); break;
+    }
+  }
+  cleanupBoards();
+}
+
+function applyAdjective(card, side, subject){
+  const who = side==='player' ? 'You' : 'Opponent';
+  switch(card.effectId){
+    case 'strong':
+      subject.curAtk+=1; subject.curHp+=1; subject.maxHp+=1; subject.nextVerbBoost=true;
+      logMsg(`${who} make 「${subject.kanji}」 強い (strong) — +1/+1, next Verb doubled.`); break;
+    case 'fast':
+      subject.attacksLeft = (subject.attacksLeft||0) + 1; if(subject.attacksLeft<1) subject.attacksLeft=1;
+      logMsg(`${who} make 「${subject.kanji}」 速い (fast) — ready, +1 attack.`); break;
+    case 'big':
+      subject.curAtk+=3; subject.curHp+=3; subject.maxHp+=3;
+      logMsg(`${who} make 「${subject.kanji}」 大きい (big) — +3/+3.`); break;
+  }
+}
+
+function applyEmotion(card, side, target){
+  const who = side==='player' ? 'You' : 'Opponent';
+  const oppSide = side==='player' ? 'ai' : 'player';
+  switch(card.effectId){
+    case 'happy':
+      healHero(side, 2); logMsg(`${who} feel 嬉しい (happy) — restore 2.`); break;
+    case 'sad':
+      drawCard(side); damageHero(side, 1);
+      logMsg(`${who} feel 悲しい (sad) — drew a card, lost 1 Health.`); break;
+    case 'angry': {
+      const res = damageHero(oppSide, 2);
+      logMsg(`${who} feel 怒る (angry) — ${res.remaining} damage to the enemy hero${res.absorbed?` (${res.absorbed} absorbed by Shield)`:''}.`); break;
+    }
+    case 'scared':
+      if(target){ target.frozen = true; logMsg(`${who} make 「${target.kanji}」 feel 怖い (scared) — it can't attack next turn.`); }
+      break;
+    case 'fun':
+      drawCard(side); drawCard(side); logMsg(`${who} feel 楽しい (fun) — drew 2 cards.`); break;
+    case 'surprised': {
+      const oppHand = side==='player' ? S.aiHand : S.playerHand;
+      const oppDeck = side==='player' ? S.aiDeck : S.playerDeck;
+      const topCard = oppDeck[0];
+      logMsg(`${who} feel 驚く (surprised) — opponent has ${oppHand.length} card(s) in hand; top of their deck is 「${topCard?topCard.kanji:'(empty)'}」.`);
+      break;
+    }
+    case 'like':
+      if(target){ target.curAtk+=1; target.curHp+=1; target.maxHp+=1; logMsg(`${who} feel 好き (like) toward 「${target.kanji}」 — +1/+1.`); }
+      break;
+    case 'dislike':
+      if(target){ target.curAtk = Math.max(0, target.curAtk-2); logMsg(`${who} feel 嫌い (dislike) toward 「${target.kanji}」 — -2 ATK.`); }
+      break;
+    case 'relief':
+      healHero(side, 5); logMsg(`${who} feel 安心 (relief) — restore 5.`); break;
+    case 'nervous': {
+      const key = side==='player' ? 'playerShield' : 'aiShield';
+      S[key] += 2;
+      logMsg(`${who} feel 緊張 (nervous) — gain a 2-point Shield.`); break;
+    }
+  }
+  cleanupBoards();
+}
+
+/* ===================== GRAMMAR TECHNIQUES (JLPT N5 patterns) ===================== */
+function activateGrammar(patternId){
+  if(S.turn!=='player' || S.over || S.grammarUsed) return;
+  const p = GRAMMAR_PATTERNS.find(g=>g.id===patternId);
+  if(!p || p.cost>S.playerMana) return;
+  if(p.need.includes('friendly') && !S.playerBoard.some(m=>m.curHp>0)){ logMsg(`${p.jp} needs one of your Objects on the board.`); render(); return; }
+  if(p.need.includes('enemy') && !S.aiBoard.some(m=>m.curHp>0)){ logMsg(`${p.jp} needs an enemy Object on the board.`); render(); return; }
+  if(p.need.length===0){
+    S.playerMana -= p.cost; S.grammarUsed = true;
+    applyGrammar(p, []);
+  } else {
+    S.pending = {type:'targeting', grammar:p, need:p.need.slice(), picks:[]};
+    S.inspect = null;
+  }
+  render();
+}
+
+function applyGrammar(p, picks){
+  switch(p.id){
+    case 'naru': {
+      const subj = picks[0];
+      const pool = NOUNS.filter(n=>n.cost===subj.cost+1);
+      const pool2 = pool.length? pool : NOUNS.filter(n=>n.cost>subj.cost);
+      if(!pool2.length){ logMsg(`「${subj.kanji}」 is already at the top — nothing to become.`); break; }
+      const tpl = pool2[Math.floor(Math.random()*pool2.length)];
+      const inst = makeInstance(tpl);
+      inst.attacksLeft = subj.attacksLeft; // transformation keeps readiness
+      const at = S.playerBoard.indexOf(subj);
+      if(at>=0) S.playerBoard.splice(at,1,inst);
+      logMsg(`「${subj.kanji}」 は 「${inst.kanji}」 になりました (became ${inst.meaning}).`);
+      break;
+    }
+    case 'tai': {
+      const vIdx = S.playerDeck.findIndex(c=>c.type==='verb');
+      if(vIdx===-1){ logMsg('たいです — but no Verbs remain in your deck.'); break; }
+      const v = S.playerDeck.splice(vIdx,1)[0];
+      if(S.playerHand.length<10){ S.playerHand.push(v); logMsg(`〜たいです (want to) — 「${v.kanji}」 comes to hand from your deck.`); }
+      else { logMsg(`〜たいです — 「${v.kanji}」 was found, but your hand is full; it is lost.`); }
+      break;
+    }
+    case 'teiru': {
+      const subj = picks[0];
+      subj.training = true;
+      logMsg(`「${subj.kanji}」 は続けています (continuous) — it will grow +1/+1 each of your turns.`);
+      break;
+    }
+    case 'dekiru': {
+      const subj = picks[0];
+      subj.attacksLeft = (subj.attacksLeft||0) + 1;
+      logMsg(`「${subj.kanji}」 は攻撃することができます (can act) — +1 attack use.`);
+      break;
+    }
+    case 'yori': {
+      const [mine, theirs] = picks;
+      if(mine.curAtk <= theirs.curAtk){
+        const gained = theirs.curAtk + 1 - mine.curAtk;
+        mine.curAtk = theirs.curAtk + 1;
+        logMsg(`「${mine.kanji}」 は 「${theirs.kanji}」 より強い (more than) — ATK +${gained} to ${mine.curAtk}.`);
+      } else {
+        logMsg(`「${mine.kanji}」 is already stronger than 「${theirs.kanji}」 — nothing changes.`);
+      }
+      break;
+    }
+  }
+  cleanupBoards();
+}
+
+function cleanupBoards(){
+  S.playerBoard = S.playerBoard.filter(m=>{ if(m.curHp<=0){ logMsg(`「${m.kanji}」 (yours) is destroyed.`); return false; } return true; });
+  S.aiBoard = S.aiBoard.filter(m=>{ if(m.curHp<=0){ logMsg(`「${m.kanji}」 (opponent's) is destroyed.`); return false; } return true; });
+  checkGameOver();
+}
+
+/* ===================== COMBAT ===================== */
+function performAttack(attacker, targetOrHero, side){
+  attacker.attacksLeft -= 1;
+  const flying = attacker.keywords.includes('Flying');
+  if(targetOrHero === 'hero'){
+    const oppSide = side==='player' ? 'ai' : 'player';
+    const res = damageHero(oppSide, attacker.curAtk);
+    const shieldNote = res.absorbed ? ` (${res.absorbed} absorbed by Shield)` : '';
+    if(side==='player'){ logMsg(`Your 「${attacker.kanji}」 attacks the enemy hero for ${res.remaining}${shieldNote}.`); }
+    else { logMsg(`Opponent's 「${attacker.kanji}」 attacks you for ${res.remaining}${shieldNote}.`); }
+  } else {
+    const target = targetOrHero;
+    target.curHp -= attacker.curAtk; attacker.curHp -= target.curAtk;
+    if(attacker.keywords.includes('Poison') && target.curAtk>=0) target.curHp = -999;
+    if(target.keywords.includes('Poison')) attacker.curHp = -999;
+    logMsg(`${side==='player'?'Your':"Opponent's"} 「${attacker.kanji}」 fights 「${target.kanji}」 (${attacker.curAtk} ⇄ ${target.curAtk}).`);
+  }
+  cleanupBoards();
+}
+
+/* ===================== AI ===================== */
+function aiTurn(){
+  if(S.over) return;
+  startTurn('ai');
+  let safety = 0;
+  while(safety++ < 24){
+    const idx = S.aiHand.findIndex(c => c.cost <= S.aiMana && hasLegalTargets(c,'ai'));
+    if(idx===-1) break;
+    const card = S.aiHand[idx];
+    if(card.type==='noun'){
+      if(S.aiBoard.length>=7) break;
+      S.aiHand.splice(idx,1); S.aiMana -= card.cost;
+      card.attacksLeft = card.keywords.includes('Charge')?1:0;
+      S.aiBoard.push(card);
+      logMsg(`Opponent plays 「${card.kanji}」 (${card.meaning}).`);
+    } else if(card.type==='emotion'){
+      S.aiHand.splice(idx,1); S.aiMana -= card.cost;
+      const need = aiNeedFor(card);
+      let target = null;
+      if(need[0]==='enemy') target = randomFrom(enemyBoard('ai'));
+      else if(need[0]==='friendly') target = randomFrom(friendlyBoard('ai'));
+      applyEmotion(card,'ai',target);
+    } else {
+      S.aiHand.splice(idx,1); S.aiMana -= card.cost;
+      const need = aiNeedFor(card);
+      const subject = need[0] ? randomFrom(friendlyBoard('ai')) : null;
+      const object = need[1] ? randomFrom(enemyBoard('ai')) : null;
+      if(card.type==='adjective') applyAdjective(card,'ai',subject);
+      else applyVerb(card,'ai',subject,object);
+    }
+    render();
+  }
+  S.aiBoard.forEach(att=>{
+    while(att.attacksLeft>0 && att.curHp>0){
+      const taunts = S.playerBoard.filter(m=>m.keywords.includes('Taunt') && m.curHp>0);
+      let target;
+      if(taunts.length>0 && !att.keywords.includes('Flying')){ target = randomFrom(taunts); }
+      else if(S.playerBoard.length>0 && Math.random()<0.45){ target = randomFrom(S.playerBoard.filter(m=>m.curHp>0)); }
+      if(target) performAttack(att, target, 'ai'); else performAttack(att, 'hero', 'ai');
+      if(S.over) break;
+    }
+  });
+  render();
+  setTimeout(()=>{ if(!S.over){ startTurn('player'); S.turnNumber++; } render(); }, 400);
+}
+function randomFrom(arr){ const pool=arr.filter(m=>m.curHp>0); return pool.length? pool[Math.floor(Math.random()*pool.length)] : null; }
+
+/* ===================== PLAYER INPUT ===================== */
+function clickHandCard(idx){
+  if(S.over || S.turn!=='player') return;
+  const card = S.playerHand[idx];
+  if(S.pending && S.pending.idxInHand===idx && (S.pending.type==='play'||S.pending.type==='targeting')){ S.pending=null; S.inspect=null; render(); return; }
+  S.inspect = {kind:'hand', card};
+  S.pending = card.cost<=S.playerMana ? {type:'play', card, idxInHand:idx} : null;
+  render();
+}
+
+function playArmedCard(){
+  if(!S.pending || S.pending.type!=='play') return;
+  const {card, idxInHand} = S.pending;
+  if(card.cost>S.playerMana) return;
+  if(card.type==='noun'){
+    if(S.playerBoard.length>=7){ logMsg('Your board is full (7 max).'); return; }
+    S.playerHand.splice(idxInHand,1); S.playerMana -= card.cost;
+    card.attacksLeft = card.keywords.includes('Charge')?1:0;
+    S.playerBoard.push(card);
+    logMsg(`You play 「${card.kanji}」 (${card.meaning}).`);
+    S.pending=null; S.inspect=null; cleanupBoards();
+  } else {
+    const need = computeNeed(card);
+    if(need.length===0){
+      S.playerHand.splice(idxInHand,1); S.playerMana -= card.cost;
+      if(card.type==='emotion') applyEmotion(card,'player',null);
+      else applyVerb(card,'player',null,null);
+      S.pending=null; S.inspect=null;
+    } else {
+      S.pending = {type:'targeting', card, idxInHand, need, picks:[]};
+    }
+  }
+  render();
+}
+function clickBoardMinion(minion, side){
+  if(S.over) return;
+  if(S.pending && S.pending.type==='targeting'){
+    const needType = S.pending.need[0];
+    const matches = (needType==='friendly' && side==='player') || (needType==='enemy' && side==='ai');
+    if(!matches || minion.curHp<=0) return;
+    S.pending.picks.push(minion); S.pending.need.shift();
+    if(S.pending.need.length===0){
+      const {card, idxInHand, picks, particle, grammar} = S.pending;
+      if(grammar){
+        S.playerMana -= grammar.cost; S.grammarUsed = true;
+        applyGrammar(grammar, picks);
+        S.pending=null; S.inspect=null;
+      } else if(card.type==='adjective'){
+        S.playerHand.splice(idxInHand,1); S.playerMana -= card.cost;
+        applyAdjective(card,'player', picks[0]);
+        S.pending=null; S.inspect=null;
+      } else if(card.type==='emotion'){
+        S.playerHand.splice(idxInHand,1); S.playerMana -= card.cost;
+        applyEmotion(card,'player', picks[0]);
+        S.pending=null; S.inspect=null;
+      } else if(particle){
+        // secondary target just picked after a particle choice (currently only 'wo' routes here)
+        S.playerHand.splice(idxInHand,1); S.playerMana -= card.cost;
+        applyVerb(card,'player', picks[0], picks[1]||null);
+        showConnectorEffect(picks[0].iid, particle, card.kanji);
+        S.pending=null; S.inspect=null;
+      } else {
+        // subject just picked, no particle chosen yet — open the picker
+        S.particlePicker = {idxInHand, card, subjectIid: picks[0].iid, options: computeParticleOptions(card)};
+        S.pending=null; S.inspect=null;
+      }
+    }
+    render(); return;
+  }
+  if(S.pending && S.pending.type==='attack'){
+    const attacker = S.pending.attacker;
+    if(side!=='ai') return;
+    const taunts = S.aiBoard.filter(m=>m.keywords.includes('Taunt') && m.curHp>0);
+    if(taunts.length>0 && !attacker.keywords.includes('Flying') && !minion.keywords.includes('Taunt')){
+      logMsg('You must attack a Taunt Object first (unless your Object can fly).'); return;
+    }
+    performAttack(attacker, minion, 'player');
+    S.pending=null; S.inspect=null; render(); return;
+  }
+  S.inspect = {kind:'board', card:minion, side};
+  if(S.turn==='player' && side==='player' && minion.attacksLeft>0 && minion.curHp>0){
+    S.pending = {type:'readyAttacker', attacker:minion};
+  } else { S.pending=null; }
+  render();
+}
+
+function armAttack(){ if(!S.pending || S.pending.type!=='readyAttacker') return; S.pending={type:'attack', attacker:S.pending.attacker}; render(); }
+
+function clickEnemyHero(){
+  if(S.over) return;
+  if(S.pending && S.pending.type==='attack'){
+    const attacker = S.pending.attacker;
+    const taunts = S.aiBoard.filter(m=>m.keywords.includes('Taunt') && m.curHp>0);
+    if(taunts.length>0 && !attacker.keywords.includes('Flying')){ logMsg('You must attack a Taunt Object first (unless your Object can fly).'); return; }
+    performAttack(attacker, 'hero', 'player');
+    S.pending=null; S.inspect=null; render();
+  }
+}
+
+function cancelPending(){ S.pending=null; S.inspect=null; render(); }
+
+function checkGameOver(){
+  if(S.playerHp<=0 && !S.over){ S.over='lose'; logMsg('Your hero has fallen. Defeat.'); }
+  if(S.aiHp<=0 && !S.over){ S.over='win'; logMsg("The opponent's hero has fallen. Victory!"); }
+}
+
+/* ===================== NARRATION (Claude-powered sentence parser) ===================== */
+function findBoardNoun(board, id){
+  for(let i=board.length-1;i>=0;i--){ if(board[i].id===id && board[i].curHp>0) return board[i]; }
+  return null;
+}
+
+async function interpretSentence(text){
+  const handInfo = S.playerHand.map(c=>({
+    id:c.id, type:c.type, kanji:c.kanji, romaji:c.romaji, meaning:c.meaning, cost:c.cost,
+    mode:c.mode||null, objectFilter:c.objectFilter||null, target:c.target||null
+  }));
+  const yourBoard = S.playerBoard.filter(m=>m.curHp>0).map(m=>({id:m.id, kanji:m.kanji, meaning:m.meaning, atk:m.curAtk, hp:m.curHp}));
+  const enemyBoard = S.aiBoard.filter(m=>m.curHp>0).map(m=>({id:m.id, kanji:m.kanji, meaning:m.meaning, atk:m.curAtk, hp:m.curHp}));
+
+  const sys = `You are the move-parser for a Japanese-grammar card game. The player narrates a sentence in English describing what they want to happen. Translate it into a sequence of concrete game actions using ONLY the cards currently in their hand below, and only relationships this engine supports. Never invent a card id that isn't listed.
+
+Card types and the action JSON each produces:
+- "noun": play it onto the player's own battlefield.
+  {"action":"play_noun","cardId":"<id>"}
+- "adjective": must target a friendly Object already on (or about to be on, via an earlier action in this sequence) the player's battlefield.
+  {"action":"play_adjective","cardId":"<id>","subject":"<noun id>"}
+- "verb", behavior depends on its "mode":
+  - mode "none": no subject/object needed.
+    {"action":"play_verb","cardId":"<id>"}
+  - mode "subject": needs a friendly Object as subject.
+    {"action":"play_verb","cardId":"<id>","subject":"<noun id>"}
+  - mode "transitive": needs a friendly subject AND an enemy Object (must already exist on the enemy board) as object.
+    {"action":"play_verb","cardId":"<id>","subject":"<noun id>","object":"<enemy noun id>"}
+- "emotion": represents how the player's hero feels. Behavior depends on its "target":
+  - target "none": affects the hero directly, no target needed.
+    {"action":"play_emotion","cardId":"<id>"}
+  - target "friendly": affects one of the player's own Objects.
+    {"action":"play_emotion","cardId":"<id>","target":"<noun id>"}
+  - target "enemy": affects an enemy Object (must already exist on the enemy board).
+    {"action":"play_emotion","cardId":"<id>","target":"<enemy noun id>"}
+
+Rules:
+- Only use cards present in the hand list, referenced by their exact "id" field.
+- subject/target must reference a noun id that is already on the relevant battlefield (or, for a friendly subject, played by an earlier action in your own returned sequence).
+- An enemy-side object reference must already exist on the enemy's battlefield (you cannot place anything there).
+- If part of the sentence has no mechanical equivalent in this hand/board (flavor, a direction, a target with no matching card), just drop that part — never invent a card or a target that doesn't exist.
+- If nothing in the sentence can be expressed with the current hand/board, return an empty array.
+- Order actions sensibly: a noun must exist before a verb, adjective, or emotion can act on it.
+- Respond with ONLY a raw JSON array of actions. No markdown fences, no commentary, no extra keys, no explanation.`;
+
+  const userContent = `Player's hand:\n${JSON.stringify(handInfo)}\n\nPlayer's battlefield:\n${JSON.stringify(yourBoard)}\n\nEnemy's battlefield:\n${JSON.stringify(enemyBoard)}\n\nMana available: ${S.playerMana}\n\nPlayer's sentence: "${text}"`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      model:"claude-sonnet-4-6",
+      max_tokens:1000,
+      system: sys,
+      messages:[{role:"user", content:userContent}]
+    })
+  });
+  const data = await response.json();
+  const textBlocks = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  const cleaned = textBlocks.replace(/```json|```/g,'').trim();
+  let actions;
+  try{ actions = JSON.parse(cleaned); } catch(e){ console.error('Narration parse failed:', cleaned); actions = []; }
+  return Array.isArray(actions) ? actions : [];
+}
+
+function executeParsedActions(actions){
+  if(!actions.length){ logMsg('No valid actions could be formed from that sentence with your current hand.'); return; }
+  actions.forEach(act=>{
+    if(S.over) return;
+    if(act.action==='play_noun'){
+      const idx = S.playerHand.findIndex(c=>c.type==='noun' && c.id===act.cardId);
+      if(idx===-1){ logMsg(`(skipped) No matching Object card in hand.`); return; }
+      const card = S.playerHand[idx];
+      if(card.cost>S.playerMana){ logMsg(`(skipped) Not enough mana for 「${card.kanji}」.`); return; }
+      if(S.playerBoard.length>=7){ logMsg('(skipped) Your board is full.'); return; }
+      S.playerHand.splice(idx,1); S.playerMana -= card.cost;
+      card.attacksLeft = card.keywords.includes('Charge')?1:0;
+      S.playerBoard.push(card);
+      logMsg(`You play 「${card.kanji}」 (${card.meaning}).`);
+    } else if(act.action==='play_adjective'){
+      const idx = S.playerHand.findIndex(c=>c.type==='adjective' && c.id===act.cardId);
+      if(idx===-1){ logMsg(`(skipped) No matching Adjective card in hand.`); return; }
+      const card = S.playerHand[idx];
+      if(card.cost>S.playerMana){ logMsg(`(skipped) Not enough mana for 「${card.kanji}」.`); return; }
+      const subject = findBoardNoun(S.playerBoard, act.subject);
+      if(!subject){ logMsg(`(skipped) 「${card.kanji}」 needs an Object on your board to modify.`); return; }
+      S.playerHand.splice(idx,1); S.playerMana -= card.cost;
+      applyAdjective(card,'player',subject);
+    } else if(act.action==='play_verb'){
+      const idx = S.playerHand.findIndex(c=>c.type==='verb' && c.id===act.cardId);
+      if(idx===-1){ logMsg(`(skipped) No matching Verb card in hand.`); return; }
+      const card = S.playerHand[idx];
+      if(card.cost>S.playerMana){ logMsg(`(skipped) Not enough mana for 「${card.kanji}」.`); return; }
+      let subject=null, object=null;
+      if(card.mode==='subject' || card.mode==='transitive'){
+        subject = findBoardNoun(S.playerBoard, act.subject);
+        if(!subject){ logMsg(`(skipped) 「${card.kanji}」 needs one of your Objects to perform it.`); return; }
+      }
+      if(card.mode==='transitive'){
+        object = findBoardNoun(S.aiBoard, act.object);
+        if(!object){ logMsg(`(skipped) 「${card.kanji}」 needs a matching enemy Object on the board.`); return; }
+      }
+      S.playerHand.splice(idx,1); S.playerMana -= card.cost;
+      applyVerb(card,'player',subject,object);
+    } else if(act.action==='play_emotion'){
+      const idx = S.playerHand.findIndex(c=>c.type==='emotion' && c.id===act.cardId);
+      if(idx===-1){ logMsg(`(skipped) No matching Emotion card in hand.`); return; }
+      const card = S.playerHand[idx];
+      if(card.cost>S.playerMana){ logMsg(`(skipped) Not enough mana for 「${card.kanji}」.`); return; }
+      let target=null;
+      if(card.target==='friendly'){
+        target = findBoardNoun(S.playerBoard, act.target);
+        if(!target){ logMsg(`(skipped) 「${card.kanji}」 needs one of your Objects to target.`); return; }
+      } else if(card.target==='enemy'){
+        target = findBoardNoun(S.aiBoard, act.target);
+        if(!target){ logMsg(`(skipped) 「${card.kanji}」 needs a matching enemy Object on the board.`); return; }
+      }
+      S.playerHand.splice(idx,1); S.playerMana -= card.cost;
+      applyEmotion(card,'player',target);
+    }
+  });
+  cleanupBoards();
+}
+
+async function submitNarration(){
+  if(S.turn!=='player' || S.over || S.narrateLoading) return;
+  const input = document.getElementById('narrateInput');
+  const text = input ? input.value.trim() : '';
+  if(!text) return;
+  logMsg(`You narrate: "${text}"`);
+  S.narrationHistory.unshift({text, turn:S.turnNumber});
+  if(S.narrationHistory.length>20) S.narrationHistory.pop();
+  S.narrateLoading = true;
+  render();
+  try{
+    const actions = await interpretSentence(text);
+    executeParsedActions(actions);
+  } catch(err){
+    console.error(err);
+    logMsg('Could not reach the interpreter — please try again.');
+  }
+  S.narrateLoading = false;
+  render();
+}
+
+/* ===================== RENDER ===================== */
+function cardFace(c, opts={}){
+  const cls=['card', c.type];
+  if(opts.lg) cls.push('lg');
+  if((c.keywords||[]).includes('Taunt')) cls.push('taunt');
+  if(c.curHp!==undefined && c.curHp<=0) cls.push('dead');
+  if(opts.armed) cls.push('armed');
+  if(opts.attacker) cls.push('attacker');
+  if(opts.targetable) cls.push('targetable');
+  if(opts.tapped) cls.push('tapped');
+  if(c.nextVerbBoost) cls.push('boosted');
+  const kw = (c.keywords||[]).join(' · ');
+  const badge = c.type==='noun' ? 'Noun' : c.type==='verb' ? (c.mode==='transitive'?'Verb · transitive':c.mode==='none'?'Verb · weather':'Verb') : c.type==='emotion' ? 'Emotion' : 'Adjective';
+  let body;
+  if(c.type==='noun'){
+    body = `
+      <div class="kana">${c.kana}</div>
+      <div class="icon" style="top:${opts.lg?34:15}px;">${c.icon}</div>
+      <div class="kanji" style="top:${opts.lg?92:42}px;">${c.kanji}</div>
+      <div class="meaning" style="top:${opts.lg?118:56}px;">${c.meaning}</div>
+      ${kw? `<div class="keywords">${kw}</div>`:''}
+      <div class="stat atk">${c.curAtk!==undefined?c.curAtk:c.atk}</div>
+      <div class="stat hp">${c.curHp!==undefined?c.curHp:c.hp}</div>
+    `;
+  } else if(c.type==='verb'){
+    if(c.scene){
+      body = `
+        <div class="kana">${c.kana}</div>
+        <div class="scene" style="top:${opts.lg?34:15}px;">${c.scene.join(' ')}</div>
+        <div class="kanji" style="top:${opts.lg?86:40}px;">${c.kanji}</div>
+        <div class="meaning" style="top:${opts.lg?112:54}px;">${c.meaning}</div>
+        <div class="microtext">${opts.lg? (c.caption + ' — ' + c.effectText) : c.effectText}</div>
+      `;
+    }
+  } else {
+    body = `
+      <div class="kana">${c.kana}</div>
+      <div class="icon" style="top:${opts.lg?34:15}px;">${c.icon}</div>
+      <div class="kanji" style="top:${opts.lg?92:42}px;">${c.kanji}</div>
+      <div class="meaning" style="top:${opts.lg?118:56}px;">${c.meaning}</div>
+      <div class="microtext">${c.effectText}</div>
+    `;
+  }
+  return `<div class="${cls.join(' ')}" data-iid="${c.iid}">
+      <div class="typebadge">${badge}</div>
+      <div class="seal">${c.cost}</div>
+      ${body}
+    </div>`;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const targetingFriendly = S.pending && S.pending.type==='targeting' && S.pending.need[0]==='friendly';
+  const targetingEnemy = S.pending && (S.pending.type==='attack' || (S.pending.type==='targeting' && S.pending.need[0]==='enemy'));
+  const heroTargetable = S.pending && S.pending.type==='attack';
+
+  const aiBoardHtml = S.aiBoard.length? S.aiBoard.map(m=>cardFace(m,{targetable: targetingEnemy && m.curHp>0})).join('') : `<div class="field empty-msg">No Objects</div>`;
+  const playerBoardHtml = S.playerBoard.length? S.playerBoard.map(m=>{
+    const armed = S.pending && (S.pending.type==='readyAttacker'||S.pending.type==='attack') && S.pending.attacker===m;
+    const targetable = targetingFriendly && m.curHp>0;
+    const tapped = (m.attacksLeft<=0) && S.turn==='player';
+    return cardFace(m,{armed, attacker:armed, targetable, tapped: tapped && !armed});
+  }).join('') : `<div class="field empty-msg">No Objects</div>`;
+
+  const handHtml = S.playerHand.map((c,idx)=>{
+    const armed = S.pending && S.pending.idxInHand===idx && (S.pending.type==='play'||S.pending.type==='targeting');
+    const affordable = c.cost<=S.playerMana;
+    const draggable = !!dragKindFor(affordable && S.turn==='player' && !S.over ? c : null);
+    return `<div data-hand-idx="${idx}" data-draggable="${draggable?'1':'0'}" style="${affordable?'':'opacity:.45;'}">${cardFace(c,{armed})}</div>`;
+  }).join('');
+
+  const manaTrack=(max,cur)=>{ let s=''; for(let i=0;i<max;i++) s+=`<div class="crystal ${i<cur?'':'empty'}"></div>`; return s; };
+
+  let inspectorHtml = `<div class="placeholder">Click any card to inspect it here.</div>`;
+  if(S.pending && S.pending.type==='targeting' && S.pending.grammar){
+    const g = S.pending.grammar;
+    const nt = S.pending.need[0];
+    const msg = nt==='friendly' ? 'Choose one of YOUR Objects.' : 'Now choose the ENEMY Object to compare against.';
+    inspectorHtml = `<div style="text-align:center;">
+      <div style="font-family:'Shippori Mincho',serif;font-weight:700;font-size:18px;">${g.jp}</div>
+      <div style="font-size:11px;color:#555;margin:4px 0 8px;">${g.gloss}</div>
+      <div class="targeting-msg">${msg}</div>
+      <button class="action-btn cancel" id="btnCancel" style="margin-top:8px;">Cancel</button>
+    </div>`;
+  }
+  else if(S.inspect){
+    const c = S.inspect.card;
+    inspectorHtml = cardFace(c,{lg:true});
+    if(c.type==='verb' && c.caption && false){} // caption already merged into lg microtext
+    if(c.mnemonic){ inspectorHtml += `<div class="mnemonic-box">💡 ${c.mnemonic}</div>`; }
+    else { inspectorHtml += `<div class="mnemonic-box" style="opacity:.6;">No mnemonic yet — add one later!</div>`; }
+    if(c.type==='verb'){
+      const g = c.mode==='transitive' ? 'Verb (transitive) — pick one of your Objects, then an enemy Object it acts on.'
+              : c.mode==='subject' ? 'Verb (intransitive) — pick one of your Objects to perform it.'
+              : 'Verb (weather) — happens on its own, no subject needed.';
+      inspectorHtml += `<div class="grammar-note">${g}</div>`;
+    } else if(c.type==='adjective'){
+      inspectorHtml += `<div class="grammar-note">Adjective — pick one of your Objects to modify.</div>`;
+    } else if(c.type==='emotion'){
+      const g = c.target==='enemy' ? 'Emotion — pick an enemy Object it affects.'
+              : c.target==='friendly' ? 'Emotion — pick one of your Objects it affects.'
+              : 'Emotion — affects your hero directly, no target needed.';
+      inspectorHtml += `<div class="grammar-note">${g}</div>`;
+    }
+    if(S.pending && S.pending.type==='play'){
+      inspectorHtml += `<button class="action-btn" id="btnPlay">Play</button>`;
+    } else if(S.pending && S.pending.type==='targeting'){
+      const nt = S.pending.need[0];
+      const pTag = S.pending.particle ? `(${PARTICLE_LABELS[S.pending.particle]}) ` : '';
+      const msg = S.pending.picks.length===0
+        ? (nt==='friendly' ? 'Choose one of YOUR Objects to perform the action.' : `${pTag}Choose an ENEMY Object as the target.`)
+        : (nt==='friendly' ? 'Now choose one of YOUR Objects.' : `${pTag}Now choose the ENEMY Object it acts on.`);
+      inspectorHtml += `<div class="targeting-msg">${msg}</div><button class="action-btn cancel" id="btnCancel">Cancel</button>`;
+    } else if(S.pending && S.pending.type==='readyAttacker'){
+      inspectorHtml += `<button class="action-btn" id="btnAttack">Attack with this</button>`;
+    } else if(S.pending && S.pending.type==='attack'){
+      inspectorHtml += `<div class="targeting-msg">Choose a target to attack…</div><button class="action-btn cancel" id="btnCancel">Cancel</button>`;
+    }
+  }
+
+  const logHtml = S.log.slice(-60).map(l=> l.marker? `<div class="turn-marker">${l.text}</div>` : `<div>${l.text}</div>`).join('');
+
+  let particleOverlay = '';
+  let guidebookOverlay = '';
+  if(guidebookUI.open){
+    const levels = ['N5','N4','N3','N2','N1'];
+    const entries = GUIDEBOOK.filter(e=>e.level===guidebookUI.level);
+    const sel = (guidebookUI.entryIdx!==null && entries[guidebookUI.entryIdx]) ? entries[guidebookUI.entryIdx] : null;
+    const detail = sel ? `
+      <h3>${sel.jp}</h3>
+      <div class="gb-romaji">${sel.romaji} — ${sel.gloss}</div>
+      <div class="gb-section"><span class="gb-tag">Textbook</span><p>${sel.textbook}</p></div>
+      <div class="gb-section gb-example"><div class="jp">${sel.example.jp}</div><div class="en">${sel.example.en}</div></div>
+      <div class="gb-section gb-mechanic"><span class="gb-tag">In the game</span><p>${sel.mechanic}</p></div>
+      ${sel.status==='soon' ? '<div style="font-size:11px;color:#888;font-style:italic;">This mechanic is designed but not yet playable.</div>' : ''}
+    ` : `<div class="gb-empty">Select a grammar point on the left.<br>${guidebookUI.level} has ${entries.length} entr${entries.length===1?'y':'ies'}.</div>`;
+    guidebookOverlay = `<div class="overlay"><div class="overlay-box gb-box">
+      <div class="gb-head"><h2>図鑑 — Grammar Guidebook</h2><button class="action-btn cancel" id="btnCloseGb">Close</button></div>
+      <div class="gb-tabs">${levels.map(l=>`<button class="gb-tab ${l===guidebookUI.level?'active':''}" data-gb-level="${l}">${l}</button>`).join('')}</div>
+      <div class="gb-body">
+        <div class="gb-list">${entries.map((e,i)=>`
+          <div class="gb-item ${i===guidebookUI.entryIdx?'active':''}" data-gb-entry="${i}">
+            <div class="gb-jp">${e.jp} ${e.status==='live'?'<span class="live-pill">LIVE</span>':'<span class="soon-pill">SOON</span>'}</div>
+            <div class="gb-gloss">${e.gloss}</div>
+          </div>`).join('')}</div>
+        <div class="gb-detail">${detail}</div>
+      </div>
+      <div class="grammar-credit" style="margin-top:8px;">Grammar reference cross-checked with <a href="https://hanabira.org/japanese/grammarlist" target="_blank" rel="noopener">hanabira.org</a> (CC BY-SA); mechanics are this game's own.</div>
+    </div></div>`;
+  }
+  if(S.particlePicker){
+    particleOverlay = `<div class="overlay"><div class="overlay-box particle-box">
+      <h3>「${S.particlePicker.card.kanji}」 — choose a particle</h3>
+      <div class="particle-grid">
+        ${S.particlePicker.options.map(o=>`
+          <button class="particle-btn ${o.enabled?'':'disabled'}" data-particle="${o.id}" ${o.enabled?'':'disabled'}>
+            <div class="particle-kana">${o.label}</div>
+            <div class="particle-desc">${o.desc}</div>
+          </button>`).join('')}
+      </div>
+      <button class="action-btn cancel" id="btnCancelParticle">Cancel</button>
+    </div></div>`;
+  }
+
+  let overlay = '';
+  if(S.over){
+    overlay = `<div class="overlay"><div class="overlay-box">
+      <h2>${S.over==='win'?'勝利 — Victory!':'敗北 — Defeat'}</h2>
+      <button class="action-btn" id="btnRestart">Play again</button>
+    </div></div>`;
+  }
+
+  app.innerHTML = `
+    <h1>言葉合戦 <span style="font-size:13px;">Kotoba Kassen</span></h1>
+    <div class="subtitle">Japanese grammar, played as a Hearthstone-style card battle</div>
+    <div class="legend">
+      <span><span class="dot noun"></span>Noun → Object on the board</span>
+      <span><span class="dot verb"></span>Verb → choose an Object to perform the action</span>
+      <span><span class="dot adj"></span>Adjective → modifies an Object / its next Verb</span>
+      <span><span class="dot emotion"></span>Emotion → affects your hero (or a single Object) directly</span>
+    </div>
+
+    <div class="hero-row">
+      <div class="hero enemy ${heroTargetable?'targetable':''}" id="aiHero"><div class="emblem">敵</div><div><div class="label">Opponent</div><div class="hp">${Math.max(0,S.aiHp)} HP${S.aiShield>0?` <span class="shield-tag">🛡${S.aiShield}</span>`:''}</div></div></div>
+      <div class="mana-track">${manaTrack(S.aiMaxMana,S.aiMana)}</div>
+    </div>
+    <div class="field enemy-field">${aiBoardHtml}</div>
+
+    <div class="divider">⚔ battlefield ⚔</div>
+
+    <div class="field" id="playerField">${playerBoardHtml}</div>
+    <div class="hero-row">
+      <div class="hero"><div class="emblem">私</div><div><div class="label">You</div><div class="hp">${Math.max(0,S.playerHp)} HP${S.playerShield>0?` <span class="shield-tag">🛡${S.playerShield}</span>`:''}</div></div></div>
+      <div class="mana-track">${manaTrack(S.playerMaxMana,S.playerMana)}</div>
+    </div>
+
+    <div class="hand-row">${handHtml}</div>
+    <div class="grammar-label">文法 — Grammar Techniques (one per turn)</div>
+    <div class="grammar-bar">
+      ${GRAMMAR_PATTERNS.map(p=>{
+        const noFriendly = p.need.includes('friendly') && !S.playerBoard.some(m=>m.curHp>0);
+        const noEnemy = p.need.includes('enemy') && !S.aiBoard.some(m=>m.curHp>0);
+        const disabled = S.turn!=='player' || S.over || S.grammarUsed || p.cost>S.playerMana || noFriendly || noEnemy;
+        return `<button class="grammar-btn" data-grammar="${p.id}" ${disabled?'disabled':''} title="${p.desc}">
+          <div class="gp-cost">${p.cost}</div>
+          <div class="gp-jp">${p.jp}</div>
+          <div class="gp-gloss">${p.gloss}</div>
+        </button>`;
+      }).join('')}
+    </div>
+    <div class="grammar-credit">JLPT N5 pattern list via <a href="https://hanabira.org/japanese/grammarlist" target="_blank" rel="noopener">hanabira.org</a> (CC BY-SA) — game mechanics are our own interpretation</div>
+    <div class="narrate-bar">
+      <input type="text" id="narrateInput" placeholder='Narrate your move, e.g. "The cat became strong and ran toward the dog"' ${(S.turn!=='player'||S.over||S.narrateLoading)?'disabled':''} />
+      <button class="action-btn" id="btnNarrate" ${(S.turn!=='player'||S.over||S.narrateLoading)?'disabled':''}>${S.narrateLoading?'Interpreting…':'Narrate ✦'}</button>
+    </div>
+    <div class="narrate-hint">Only cards in your hand can be used — Claude maps your sentence onto them, the rest is up to your imagination.</div>
+    ${S.narrationHistory.length? `<div class="narrate-history">${S.narrationHistory.map((h,i)=>
+      `<div class="narrate-chip" data-history-idx="${i}"><span class="turn-tag">T${h.turn}</span>${h.text}</div>`
+    ).join('')}</div>` : ''}
+
+    <div class="bottom-bar">
+      <div class="inspector">${inspectorHtml}</div>
+      <div class="log">${logHtml}</div>
+      <div class="controls">
+        <div class="turn-banner ${S.turn}">${S.turn==='player'?'Your turn':"Opponent's turn"}</div>
+        <button class="action-btn" id="btnEndTurn" ${S.turn!=='player'||S.over?'disabled':''}>End Turn</button>
+        <button class="action-btn" id="btnGuidebook" style="background:var(--moss);font-size:12px;">図鑑 Guidebook</button>
+        <div class="hint">Drag an Object onto<br>the battlefield to play it.<br>Click any card to inspect.</div>
+      </div>
+    </div>
+    ${particleOverlay}
+    ${guidebookOverlay}
+    ${overlay}
+  `;
+
+  app.querySelectorAll('[data-hand-idx]').forEach(el=>{
+    const idx = parseInt(el.dataset.handIdx);
+    el.addEventListener('click',()=>clickHandCard(idx));
+    el.addEventListener('pointerdown', e=>onHandPointerDown(e, idx, el));
+  });
+  const fields = app.querySelectorAll('.field');
+  if(fields[0]) fields[0].querySelectorAll('[data-iid]').forEach(el=>{
+    const m = S.aiBoard.find(x=>x.iid===el.dataset.iid); if(m) el.addEventListener('click',()=>clickBoardMinion(m,'ai'));
+  });
+  if(fields[1]){
+    fields[1].querySelectorAll('[data-iid]').forEach(el=>{
+      const m = S.playerBoard.find(x=>x.iid===el.dataset.iid); if(m) el.addEventListener('click',()=>clickBoardMinion(m,'player'));
+    });
+  }
+  const aiHeroEl = document.getElementById('aiHero'); if(aiHeroEl) aiHeroEl.addEventListener('click', clickEnemyHero);
+  const btnPlay = document.getElementById('btnPlay'); if(btnPlay) btnPlay.addEventListener('click', playArmedCard);
+  const btnAttack = document.getElementById('btnAttack'); if(btnAttack) btnAttack.addEventListener('click', armAttack);
+  const btnCancel = document.getElementById('btnCancel'); if(btnCancel) btnCancel.addEventListener('click', cancelPending);
+  const btnEnd = document.getElementById('btnEndTurn'); if(btnEnd) btnEnd.addEventListener('click', endPlayerTurn);
+  const btnNarrate = document.getElementById('btnNarrate'); if(btnNarrate) btnNarrate.addEventListener('click', submitNarration);
+  app.querySelectorAll('[data-grammar]').forEach(el=>{
+    if(el.disabled) return;
+    el.addEventListener('click', ()=>activateGrammar(el.dataset.grammar));
+  });
+  const narrateInput = document.getElementById('narrateInput');
+  if(narrateInput) narrateInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); submitNarration(); } });
+  app.querySelectorAll('[data-history-idx]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const h = S.narrationHistory[parseInt(el.dataset.historyIdx)];
+      const inp = document.getElementById('narrateInput');
+      if(h && inp){ inp.value = h.text; inp.focus(); }
+    });
+  });
+  const btnRestart = document.getElementById('btnRestart'); if(btnRestart) btnRestart.addEventListener('click', ()=>{ newGame(); render(); });
+  app.querySelectorAll('[data-particle]').forEach(el=>{
+    if(el.disabled) return;
+    el.addEventListener('click', ()=>chooseParticle(el.dataset.particle));
+  });
+  const btnGb = document.getElementById('btnGuidebook'); if(btnGb) btnGb.addEventListener('click', ()=>{ guidebookUI.open=true; render(); });
+  const btnCloseGb = document.getElementById('btnCloseGb'); if(btnCloseGb) btnCloseGb.addEventListener('click', ()=>{ guidebookUI.open=false; render(); });
+  app.querySelectorAll('[data-gb-level]').forEach(el=>{
+    el.addEventListener('click', ()=>{ guidebookUI.level=el.dataset.gbLevel; guidebookUI.entryIdx=null; render(); });
+  });
+  app.querySelectorAll('[data-gb-entry]').forEach(el=>{
+    el.addEventListener('click', ()=>{ guidebookUI.entryIdx=parseInt(el.dataset.gbEntry); render(); });
+  });
+  const btnCancelParticle = document.getElementById('btnCancelParticle'); if(btnCancelParticle) btnCancelParticle.addEventListener('click', cancelParticle);
+
+  const logEl = app.querySelector('.log'); if(logEl) logEl.scrollTop = logEl.scrollHeight;
+}
+
+newGame();
+render();
+</script>
+</body>
+</html>
