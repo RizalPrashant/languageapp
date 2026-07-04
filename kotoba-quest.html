@@ -218,6 +218,7 @@
     <div class="gearline">
       <button class="btn small" onclick="openVocab()">📖 Collection · 図鑑</button>
       <button class="btn small" onclick="openSettings()">⚙ Settings · API key</button>
+      <button class="btn small danger" onclick="clearProgress()">🔄 Start over · 初めから</button>
     </div>
 
     <div class="home-foot">
@@ -1048,6 +1049,12 @@ const FLOOR_SLOTS=[[2,3],[5,3],[9,3],[12,3],[13,5],[2,5],[4,7],[7,7],[10,7],[13,
 const WALL_SLOTS=[[2.5,0.4],[5.5,0.4],[8.5,0.4],[11.5,0.4],[13,0.4]];
 const WRONG_COOLDOWN_MS=8000;
 const LS={ key:'kq_apikey', prog:'kq_progress', today:'kq_today' };
+/* sprites that can become named companions the player re-meets across days */
+const ANIMATE_SPRITES=['cat','dog','fishbowl','plant'];
+const NAME_POOLS={
+  ja:['タマ','ポチ','モモ','ハナ','クロ','ユキ','チビ','コテツ'],
+  zh:['咪咪','旺旺','豆豆','小白','团子','花花','小黑','阿福']
+};
 
 /* ---------------- state ---------------- */
 let S=null;      // session: {lang, day, objects[], learned{}, wrongAt{}, misses{}}
@@ -1063,7 +1070,7 @@ function getProg(){
   try{ return JSON.parse(localStorage.getItem(LS.prog)) || {}; }catch(e){ return {}; }
 }
 function saveProg(p){ localStorage.setItem(LS.prog, JSON.stringify(p)); }
-function defaultProg(){ return { streak:0, lastDone:null, daysDone:0, known:{ja:[],zh:[]}, vocab:{ja:{},zh:{}} }; }
+function defaultProg(){ return { streak:0, lastDone:null, daysDone:0, known:{ja:[],zh:[]}, vocab:{ja:{},zh:{}}, companions:{ja:{},zh:{}} }; }
 /* API key: pasted in Settings (localStorage) wins, else env.js (local dev) */
 function getKey(){ return localStorage.getItem(LS.key) || window.ANTHROPIC_KEY || null; }
 function prog(){ return Object.assign(defaultProg(), getProg()); }
@@ -1099,7 +1106,7 @@ function charCanvas(dir,frame,flip){
 }
 
 /* ---------------- day setup ---------------- */
-function buildSession(lang, day){
+function buildSession(lang, day, visitors){
   // assign sprites to slots
   const floorSlots=shuffle(FLOOR_SLOTS.slice());
   const wallSlots=shuffle(WALL_SLOTS.slice());
@@ -1118,7 +1125,30 @@ function buildSession(lang, day){
     objects.push({ idx:i, sprite:sp, mount:SPRITES[sp].mount==='wall'&&pos[1]<1?'wall':'floor',
       tx:pos[0], ty:pos[1] });
   });
-  return { lang, day, objects, learned:{}, wrongAt:{}, misses:{}, date:todayStr() };
+  // returning companions wander in (skip if their sprite/word is already in today's quest)
+  (visitors||[]).forEach(v=>{
+    if(!SPRITES[v.sprite] || usedSprites.has(v.sprite)) return;
+    if(day.words.some(w=>w.word===v.word)) return;
+    if(!floorSlots.length) return;
+    usedSprites.add(v.sprite);
+    const pos=floorSlots.pop();
+    objects.push({ companion:true, word:v.word, comp:v, sprite:v.sprite, mount:'floor', tx:pos[0], ty:pos[1] });
+  });
+  return { lang, day, objects, learned:{}, compDone:{}, wrongAt:{}, misses:{}, date:todayStr() };
+}
+
+/* pick up to 2 old friends to revisit today */
+function pickVisitors(lang){
+  const reg=prog().companions[lang]||{};
+  return shuffle(Object.values(reg).slice()).slice(0,2);
+}
+function bakedDayWithVisitors(lang, visitors){
+  const day=JSON.parse(JSON.stringify(BAKED[lang]));
+  (visitors||[]).forEach(v=>{
+    if(!day.words.some(w=>w.word===v.word))
+      day.story+=` And look — {${v.word}} ${v.name} has wandered back in to see you.`;
+  });
+  return day;
 }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
@@ -1126,7 +1156,7 @@ function saveToday(){
   if(!S) return;
   localStorage.setItem(LS.today, JSON.stringify({
     date:S.date, lang:S.lang, day:S.day, learned:S.learned, misses:S.misses,
-    objects:S.objects
+    compDone:S.compDone||{}, objects:S.objects
   }));
 }
 function loadToday(lang){
@@ -1141,13 +1171,14 @@ function loadToday(lang){
 function startLang(lang){
   const saved=loadToday(lang);
   if(saved){
-    S=Object.assign({wrongAt:{}}, saved);
+    S=Object.assign({wrongAt:{}, compDone:{}}, saved);
     enterGame(false);
     return;
   }
   if(getKey()){ generateDay(lang); }
   else{
-    S=buildSession(lang, BAKED[lang]);
+    const visitors=pickVisitors(lang);
+    S=buildSession(lang, bakedDayWithVisitors(lang, visitors), visitors);
     saveToday();
     enterGame(true);
     toast("No API key set — playing the built-in starter quest. Add a key in ⚙ Settings for endless days!");
@@ -1213,6 +1244,7 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('show');
 
 /* ---------------- word dialog ---------------- */
 function openWord(obj){
+  if(obj.companion){ openCompanion(obj); return; }
   const w=S.day.words[obj.idx];
   currentWord=obj;
   const learned=!!S.learned[obj.idx];
@@ -1288,6 +1320,19 @@ function answer(btn, correct){
     const vocab=p.vocab[S.lang]||(p.vocab[S.lang]={});
     if(!vocab[w.word]) vocab[w.word]={ meaning:w.meaning, reading:w.reading, romaji:w.romaji||'',
       mnemonic:w.mnemonic||'', learnedOn:todayStr(), misses:S.misses[idx]||0 };
+    // animate objects become named companions who will revisit future rooms
+    if(ANIMATE_SPRITES.includes(currentWord.sprite)){
+      const comps=p.companions[S.lang]||(p.companions[S.lang]={});
+      if(!comps[w.word]){
+        const names=NAME_POOLS[S.lang]||NAME_POOLS.ja;
+        const name=names[Object.keys(comps).length % names.length];
+        comps[w.word]={ name, sprite:currentWord.sprite, word:w.word, meaning:w.meaning,
+          reading:w.reading, romaji:w.romaji||'', mnemonic:w.mnemonic||'',
+          distractors:(w.distractors||[]).slice(0,3),
+          timesMet:1, affection:1, firstMet:todayStr(), lastMet:todayStr() };
+        setTimeout(()=>toast(`${name} the ${w.meaning} has taken a liking to you… you may meet again. ♥`), 1500);
+      }
+    }
     saveProg(p);
     spawnSparkle(currentWord);
     setTimeout(()=>{
@@ -1309,6 +1354,95 @@ function answer(btn, correct){
     setTimeout(()=>{
       closeOverlay('ov-word');
       toast(`Not quite… 「${w.word}」 will ask again. Re-read the story! 📜`);
+    },850);
+  }
+}
+
+/* ---------------- companions (returning friends = disguised review) ---------------- */
+function reunionLine(v){
+  const t=[
+    `{${v.word}} ${v.name} pads across the room to greet you — it remembered you!`,
+    `Your old friend ${v.name} the {${v.word}} is back, clearly pleased to see you.`,
+    `${v.name} — the {${v.word}} from a past quest — has been waiting here all along.`
+  ];
+  return t[(v.timesMet||1) % t.length];
+}
+
+function openCompanion(obj){
+  const v=obj.comp;
+  currentWord=obj;
+  const done=!!(S.compDone&&S.compDone[v.word]);
+  const kkey='c:'+v.word;
+  const lockedUntil=S.wrongAt[kkey]||0;
+  if(!done && Date.now()<lockedUntil){
+    const s=Math.ceil((lockedUntil-Date.now())/1000);
+    toast(`${v.name} looks a little hurt… give it ${s}s.`);
+    return;
+  }
+  // first greeting of the day: the friendship deepens
+  if(!obj.greeted){
+    obj.greeted=true;
+    const p=prog(); const reg=p.companions[S.lang]||{};
+    if(reg[v.word]){ reg[v.word].timesMet=(reg[v.word].timesMet||1)+1; reg[v.word].lastMet=todayStr();
+      v.timesMet=reg[v.word].timesMet; saveProg(p); }
+    saveToday();
+  }
+  document.getElementById('word-seal').textContent='♥';
+  document.getElementById('w-big').textContent=v.name;
+  document.getElementById('w-reading').textContent=v.word+'（'+v.reading+'）';
+  document.getElementById('w-romaji').textContent='companion · together since '+(v.firstMet||'?')+' · met ×'+(v.timesMet||1);
+  document.getElementById('w-sentence').innerHTML=markupStory(reunionLine(v));
+  document.getElementById('w-hint').textContent='';
+  document.getElementById('w-hint').classList.remove('show');
+  document.getElementById('word-panel').classList.remove('shake');
+
+  const asWord={ word:v.word, reading:v.reading, meaning:v.meaning,
+    mnemonic:v.mnemonic||'', sentence:reunionLine(v) };
+  if(done){
+    document.getElementById('w-quizblock').style.display='none';
+    document.getElementById('w-revealblock').style.display='block';
+    document.querySelector('#w-revealblock .result-banner').textContent='Bond '+'♥'.repeat(Math.min(v.affection||1,8));
+    fillReveal(asWord);
+  }else{
+    document.getElementById('w-quizblock').style.display='block';
+    document.getElementById('w-revealblock').style.display='none';
+    const opts=shuffle([v.meaning, ...(v.distractors||['thing','place','action']).slice(0,3)]);
+    const box=document.getElementById('w-opts'); box.innerHTML='';
+    opts.forEach(o=>{
+      const b=document.createElement('button');
+      b.className='opt'; b.textContent=o;
+      b.onclick=()=>answerComp(b, o===v.meaning);
+      box.appendChild(b);
+    });
+  }
+  document.getElementById('ov-word').classList.add('show');
+}
+
+function answerComp(btn, correct){
+  const obj=currentWord; if(!obj||!obj.companion) return;
+  const v=obj.comp;
+  document.querySelectorAll('#w-opts .opt').forEach(b=>b.disabled=true);
+  if(correct){
+    btn.classList.add('correct'); playTone([659,784,988],90);
+    S.compDone=S.compDone||{}; S.compDone[v.word]=true;
+    const p=prog(); const reg=p.companions[S.lang]||{};
+    if(reg[v.word]){ reg[v.word].affection=(reg[v.word].affection||1)+1; v.affection=reg[v.word].affection; saveProg(p); }
+    saveToday(); spawnSparkle(obj);
+    setTimeout(()=>{
+      document.getElementById('w-quizblock').style.display='none';
+      document.getElementById('w-revealblock').style.display='block';
+      document.querySelector('#w-revealblock .result-banner').textContent=
+        'It remembers you! Bond '+'♥'.repeat(Math.min(v.affection||1,8));
+      fillReveal({ word:v.word, reading:v.reading, meaning:v.meaning,
+        mnemonic:v.mnemonic||'', sentence:reunionLine(v) });
+    },550);
+  }else{
+    btn.classList.add('wrong'); playTone([196,147],160);
+    S.wrongAt['c:'+v.word]=Date.now()+WRONG_COOLDOWN_MS;
+    document.getElementById('word-panel').classList.add('shake');
+    setTimeout(()=>{
+      closeOverlay('ov-word');
+      toast(`${v.name} tilts its head… you've forgotten? Come back and try again.`);
     },850);
   }
 }
@@ -1365,6 +1499,17 @@ function openVocab(){
     });
     html+='</div>';
   });
+  // companions section
+  let compHtml='';
+  ['ja','zh'].forEach(lg=>{
+    Object.values((p.companions&&p.companions[lg])||{}).forEach(v=>{
+      compHtml+='<div class="recap-item"><span class="rw">'+escapeHtml(v.word)+'</span>'+
+        '<span class="rr">'+escapeHtml(v.name)+'</span>'+
+        '<span style="font-size:9px;color:#999;font-family:JetBrains Mono,monospace;">met ×'+(v.timesMet||1)+'</span>'+
+        '<span class="rm" style="color:var(--emotion);">'+'♥'.repeat(Math.min(v.affection||1,8))+'</span></div>';
+    });
+  });
+  if(compHtml) html+='<div style="font-weight:700;font-size:12px;color:var(--emotion);margin:12px 0 6px;">Companions 仲間 — friends who revisit your rooms</div><div class="recap-list">'+compHtml+'</div>';
   body.innerHTML=html||'<div style="text-align:center;color:#888;font-size:13px;padding:14px 0;">Nothing yet — clear your first quest and the words will live here forever.</div>';
   const ov=document.getElementById('ov-vocab');
   if(document.getElementById('game').style.display!=='block'){ ov.style.position='fixed'; ov.style.inset='0'; }
@@ -1393,9 +1538,12 @@ function saveSettings(){
   toast(v? 'Key saved. ✨ New day is now powered by Haiku.' : 'Key cleared.');
 }
 function clearProgress(){
-  if(!confirm('Reset streak, learned words and today\'s quest?')) return;
+  if(!confirm('Start over from day 1?\n\nThis wipes your streak, learned words, companions and today\'s quest. Your API key is kept.')) return;
   localStorage.removeItem(LS.prog); localStorage.removeItem(LS.today);
-  refreshHomeStats(); closeOverlay('ov-settings'); toast('Progress reset.');
+  S=null;
+  closeOverlay('ov-settings');
+  goHome();
+  toast('A fresh start — day 1 awaits. 初めから！');
 }
 
 /* ---------------- Haiku generation ---------------- */
@@ -1404,6 +1552,11 @@ async function generateDay(lang){
   const langName= lang==='ja'? 'Japanese (JLPT N5 level)' : 'Mandarin Chinese (HSK 1 level)';
   const readingName= lang==='ja'? 'hiragana reading' : 'pinyin with tone marks';
   const known=(prog().known[lang]||[]).slice(-120);
+  const visitors=pickVisitors(lang);
+  const compBrief=visitors.length?
+    `\n\nReturning companions the player already knows and loves (do NOT count them among the 8 words, do NOT re-teach their words, but DO weave one warm sentence about each returning into the story, keeping their word in curly braces): `+
+    visitors.map(v=>`${v.name} the ${v.meaning} ({${v.word}}), met ${v.timesMet||1} time(s) before`).join('; ')+'.'
+    : '';
   document.getElementById('ov-loading').classList.add('show');
   document.getElementById('home').style.display='none';
   document.getElementById('game').style.display='block';
@@ -1452,7 +1605,7 @@ Constraints:
         model:"claude-haiku-4-5",
         max_tokens:4000,
         system:sys,
-        messages:[{role:"user",content:`Design today's ${langName} quest. Date seed: ${todayStr()}-${Math.floor(Math.random()*9999)}`}]
+        messages:[{role:"user",content:`Design today's ${langName} quest. Date seed: ${todayStr()}-${Math.floor(Math.random()*9999)}${compBrief}`}]
       })
     });
     if(!resp.ok){
@@ -1464,14 +1617,14 @@ Constraints:
     const cleaned=text.replace(/```json|```/g,'').trim();
     const day=JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}')+1));
     validateDay(day);
-    S=buildSession(lang, day);
+    S=buildSession(lang, day, visitors);
     saveToday();
     closeOverlay('ov-loading');
     enterGame(true);
   }catch(e){
     console.error('Generation failed:', e);
     closeOverlay('ov-loading');
-    S=buildSession(lang, BAKED[lang]);
+    S=buildSession(lang, bakedDayWithVisitors(lang, visitors), visitors);
     saveToday();
     enterGame(true);
     toast('Haiku couldn\'t reach the brush ('+ (e.message||'error').slice(0,60) +') — playing the starter quest.');
@@ -1580,7 +1733,7 @@ function draw(){
   // objects (wall first, then floor sorted with player by y)
   const drawables=[];
   for(const o of S.objects){
-    const learned=!!S.learned[o.idx];
+    const learned= o.companion? !!(S.compDone&&S.compDone[o.word]) : !!S.learned[o.idx];
     if(o.mount==='wall'){
       drawObj(o, o.tx*TILE-0, 4, learned);
     }else{
@@ -1604,7 +1757,7 @@ function draw(){
     ctx.fillStyle=PAL.k; ctx.fillRect(bx-6,by,13,1); ctx.fillRect(bx-6,by+10,13,1);
     ctx.fillRect(bx-6,by,1,11); ctx.fillRect(bx+6,by,1,11);
     ctx.fillRect(bx-1,by+11,2,2);
-    ctx.fillStyle=S.learned[o.idx]? PAL.m : PAL.r;
+    ctx.fillStyle=o.companion? PAL.p : (S.learned[o.idx]? PAL.m : PAL.r);
     ctx.font='bold 8px monospace'; ctx.textAlign='left';
     ctx.fillText('E', bx-2, by+8);
   }
@@ -1612,12 +1765,19 @@ function draw(){
 
 function drawObj(o, x, y, learned){
   if(learned){
-    // gold aura
+    // gold aura (pink for companions)
     const pulse=2+Math.sin(Date.now()/300)*1.5;
-    ctx.fillStyle='rgba(184,146,58,0.28)';
+    ctx.fillStyle=o.companion? 'rgba(193,69,122,0.25)' : 'rgba(184,146,58,0.28)';
     ctx.fillRect(x-pulse, y+2-pulse, 16+pulse*2, 16+pulse*2);
   }
   ctx.drawImage(spriteCanvas(o.sprite), x, y);
+  if(o.companion){
+    // bobbing heart — an old friend is here
+    const hy=Math.round(y-7+Math.sin(Date.now()/250)*1.5);
+    ctx.fillStyle=PAL.p;
+    ctx.fillRect(x+5,hy,2,2); ctx.fillRect(x+9,hy,2,2);
+    ctx.fillRect(x+5,hy+1,6,2); ctx.fillRect(x+6,hy+3,4,1); ctx.fillRect(x+7,hy+4,2,1);
+  }
   if(learned){
     // little gold seal check
     ctx.fillStyle=PAL.g; ctx.fillRect(x+11,y-1,7,7);
