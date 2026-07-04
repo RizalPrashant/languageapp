@@ -1,18 +1,41 @@
-import { useCallback, useRef, useState } from 'react'
-import type { Lang, Session } from './types'
-import { bakedDayWithVisitors, buildSession, pickVisitors } from './game/engine'
-import { generateDay } from './lib/haiku'
-import { clearAllProgress, getApiKey, getProg, loadToday, saveToday } from './lib/storage'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Lang } from './types'
 import HomeScreen from './components/HomeScreen'
-import GameScreen from './components/GameScreen'
-import { LoadingOverlay, SettingsOverlay, VocabOverlay } from './components/overlays'
+import WorldScreen from './components/WorldScreen'
+import { SettingsOverlay, WorldVocabOverlay } from './components/overlays'
+import { clearWorldProgress } from './lib/worldStorage'
+import { conceptToId, loadBank, setLang } from './lib/bank'
+import { EPISODES } from './data/episodes'
+import EpisodeSelect from './components/EpisodeSelect'
+import { musicEnabled, setMusicEnabled, startMusic } from './lib/music'
 
 export default function App() {
-  const [screen, setScreen] = useState<'home' | 'game'>('home')
-  const [session, setSession] = useState<Session | null>(null)
-  const [genId, setGenId] = useState(0)          // remounts GameScreen per new session
-  const [loading, setLoading] = useState(false)
+  const [screen, setScreen] = useState<'home' | 'world'>('home')
+  const [worldKey, setWorldKey] = useState(0)
+  const [bankReady, setBankReady] = useState(false)
+
+  useEffect(() => {
+    loadBank().then(ok => {
+      setBankReady(true)
+      setWorldKey(k => k + 1)   // re-render stats with the full bank
+      if (!ok) console.warn('running on starter bank')
+    })
+    // browsers require a user gesture before audio: arm a one-time starter
+    const arm = () => { startMusic(); removeEventListener('pointerdown', arm); removeEventListener('keydown', arm) }
+    addEventListener('pointerdown', arm)
+    addEventListener('keydown', arm)
+    return () => { removeEventListener('pointerdown', arm); removeEventListener('keydown', arm) }
+  }, [])
+
+  const [musicOn, setMusicOn] = useState(musicEnabled())
+  function toggleMusic() {
+    const next = !musicOn
+    setMusicOn(next)
+    setMusicEnabled(next)
+    showToast(next ? '🎵 Music on' : '🔇 Music off')
+  }
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [epSelectOpen, setEpSelectOpen] = useState(false)
   const [vocabOpen, setVocabOpen] = useState(false)
   const [toast, setToast] = useState<{ msg: string; id: number } | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
@@ -23,90 +46,72 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), 3600)
   }, [])
 
-  function adopt(s: Session) {
-    setSession(s)
-    setGenId(id => id + 1)
-    setScreen('game')
-  }
-
-  async function generate(lang: Lang) {
-    const key = getApiKey()!
-    const prog = getProg()
-    const visitors = pickVisitors(lang, prog)
-    setLoading(true)
-    try {
-      const day = await generateDay(lang, key, prog.known[lang] || [], visitors)
-      const s = buildSession(lang, day, visitors)
-      saveToday(s)
-      adopt(s)
-    } catch (e) {
-      console.error('Generation failed:', e)
-      const s = buildSession(lang, bakedDayWithVisitors(lang, visitors), visitors)
-      saveToday(s)
-      adopt(s)
-      showToast(`Haiku couldn't reach the brush (${String((e as Error).message || e).slice(0, 60)}) — playing the starter quest.`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   function startLang(lang: Lang) {
-    const saved = loadToday(lang)
-    if (saved) { adopt(saved); return }
-    if (getApiKey()) { void generate(lang); return }
-    const visitors = pickVisitors(lang, getProg())
-    const s = buildSession(lang, bakedDayWithVisitors(lang, visitors), visitors)
-    saveToday(s)
-    adopt(s)
-    showToast('No API key set — playing the built-in starter quest. Add a key in ⚙ Settings for endless days!')
-  }
-
-  function newDay() {
-    if (!session) return
-    if (!getApiKey()) {
-      setSettingsOpen(true)
-      showToast('Add your Anthropic API key first — then Haiku writes a fresh story every time.')
+    if (lang === 'ja' && !bankReady) {
+      showToast('Loading the word bank… one second.')
       return
     }
-    void generate(session.lang)
+    setLang(lang)
+    setWorldKey(k => k + 1)
+    setScreen('world')
+  }
+
+  /* TEST MODE: jump to any episode as if every previous one was cleared. */
+  function jumpToEpisode(lang: Lang, ep: number) {
+    if (lang === 'ja' && !bankReady) {
+      showToast('Loading the word bank… one second.')
+      return
+    }
+    setLang(lang)
+    const learnedIds: number[] = []
+    for (const e of EPISODES) {
+      if (e.ep >= ep) continue
+      for (const w of e.words) {
+        const id = conceptToId(w)
+        if (id !== undefined && !learnedIds.includes(id)) learnedIds.push(id)
+      }
+    }
+    const prog = { dayNumber: ep, streak: ep - 1, lastDone: null, daysDone: ep - 1, learnedIds }
+    localStorage.setItem(`kq2_${lang}_progress`, JSON.stringify(prog))
+    localStorage.removeItem(`kq2_${lang}_today`)
+    if (lang === 'ja') { localStorage.removeItem('kq2_today'); localStorage.removeItem('kq2_progress') }
+    setEpSelectOpen(false)
+    setWorldKey(k => k + 1)
+    setScreen('world')
+    showToast(`🎬 Episode ${ep} — ${learnedIds.length} earlier words marked learned`)
   }
 
   function resetAll() {
-    if (!confirm("Start over from day 1?\n\nThis wipes your streak, learned words, companions and today's quest. Your API key is kept.")) return
-    clearAllProgress()
-    setSession(null)
+    if (!confirm("Start over from Day 1?\n\nThis wipes your streak, every learned word and today's quests. Your API key is kept.")) return
+    clearWorldProgress()
     setSettingsOpen(false)
     setScreen('home')
-    showToast('A fresh start — day 1 awaits. 初めから！')
+    setWorldKey(k => k + 1)
+    showToast('A fresh start — Day 1 awaits. 初めから！')
   }
 
   return (
     <div className="app-frame">
-      {screen === 'home' || !session ? (
+      {screen === 'home' ? (
         <HomeScreen
-          prog={getProg()}
           onStart={startLang}
           onOpenVocab={() => setVocabOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onReset={resetAll}
+          onOpenEpisodes={() => setEpSelectOpen(true)}
+          musicOn={musicOn}
+          onToggleMusic={toggleMusic}
         />
       ) : (
-        <GameScreen
-          key={genId}
-          session={session}
-          paused={loading || settingsOpen || vocabOpen}
-          hasKey={!!getApiKey()}
-          onHome={() => setScreen('home')}
-          onNewDay={newDay}
-          showToast={showToast}
-        />
+        <WorldScreen key={worldKey} onHome={() => setScreen('home')} showToast={showToast}
+          musicOn={musicOn} onToggleMusic={toggleMusic} />
       )}
 
-      {loading && <LoadingOverlay />}
       {settingsOpen && (
         <SettingsOverlay onClose={() => setSettingsOpen(false)} onReset={resetAll} showToast={showToast} />
       )}
-      {vocabOpen && <VocabOverlay prog={getProg()} onClose={() => setVocabOpen(false)} />}
+      {vocabOpen && <WorldVocabOverlay onClose={() => setVocabOpen(false)} />}
+      {epSelectOpen && <EpisodeSelect onClose={() => setEpSelectOpen(false)} onJump={jumpToEpisode} />}
 
       <div className={'toast' + (toast ? ' show' : '')}>{toast?.msg}</div>
     </div>

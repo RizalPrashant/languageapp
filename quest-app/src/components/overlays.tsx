@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import type { Companion, Progress, VocabEntry } from '../types'
 import { getStoredKey, hasEnvKey, setApiKey } from '../lib/storage'
+import { getWorldProg } from '../lib/worldStorage'
+import { BANK, BANK_BY_ID } from '../lib/bank'
 
 /* ---------- shared bits ---------- */
 
@@ -93,6 +95,42 @@ export function SettingsOverlay({ onClose, onReset, showToast }: {
             showToast(val.trim() ? 'Key saved. ✨ New day is now powered by Haiku.' : 'Key cleared.')
             onClose()
           }}>Save</button>
+          <button className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </Overlay>
+  )
+}
+
+/* ---------- world-mode collection (bank + learnedIds) ---------- */
+
+export function WorldVocabOverlay({ onClose }: { onClose: () => void }) {
+  const learnedIds = getWorldProg().learnedIds
+  const words = learnedIds.map(id => BANK_BY_ID[id]).filter(Boolean)
+  return (
+    <Overlay fixed>
+      <div className="panel">
+        <div className="corner-seal">図</div>
+        <h2>Word Collection 図鑑</h2>
+        <div className="psub">
+          {words.length
+            ? `${words.length} of ${BANK.length} words conquered — each one now lives in Japanese, everywhere in the world.`
+            : 'Every word you conquer will live here.'}
+        </div>
+        {words.length === 0 && (
+          <div className="vocab-empty">Nothing yet — clear your first quests and the words appear here.</div>
+        )}
+        <div className="recap-list">
+          {words.slice().reverse().map(w => (
+            <div className="recap-item" key={w.id}>
+              <span className="rw">{w.ja}</span>
+              <span className="rr">{w.reading}</span>
+              <span className="rdate">{w.pos}</span>
+              <span className="rm">{w.en}</span>
+            </div>
+          ))}
+        </div>
+        <div className="panel-actions">
           <button className="btn" onClick={onClose}>Close</button>
         </div>
       </div>

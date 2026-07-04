@@ -1,4 +1,10 @@
-export type Lang = 'ja' | 'zh'
+export type Lang = 'ja' | 'zh' | 'de'
+
+/* ---------- segment-based diglot text ----------
+   Every piece of world text is a list of segments. {t} is plain English,
+   {w} references a word in the bank: rendered in Japanese once learned,
+   English before that. One stored world, progressively translated. */
+export type Seg = { t: string } | { w: number }
 export type ThemeName = 'tatami' | 'wood' | 'night' | 'garden' | 'stone'
 export type Mount = 'floor' | 'wall'
 export type Dir = 'up' | 'down' | 'left' | 'right'

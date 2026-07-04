@@ -27,3 +27,6 @@ Sandbox build: all mechanics available from the start; the guidebook organizes g
 ## Credits
 
 JLPT grammar pattern lists cross-referenced with [hanabira.org](https://hanabira.org) (CC BY-SA). All game mechanics are original interpretations.
+
+# Vocabulary data
+JLPT word lists via open-anki-jlpt-decks (github.com/jamsinclair/open-anki-jlpt-decks), built from Jonathan Waller's JLPT resources (tanos.co.uk, CC BY).

@@ -74,7 +74,7 @@ export function pickVisitors(lang: Lang, prog: Progress): Companion[] {
 }
 
 export function bakedDayWithVisitors(lang: Lang, visitors: Companion[]): Day {
-  const day: Day = JSON.parse(JSON.stringify(BAKED[lang]))
+  const day: Day = JSON.parse(JSON.stringify(BAKED[lang as 'ja' | 'zh'] || BAKED.ja))
   visitors.forEach(v => {
     if (!day.words.some(w => w.word === v.word)) {
       day.story += ` And look — {${v.word}} ${v.name} has wandered back in to see you.`

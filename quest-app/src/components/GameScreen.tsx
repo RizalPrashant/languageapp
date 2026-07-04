@@ -342,7 +342,7 @@ export default function GameScreen({ session, paused, hasKey, onHome, onNewDay, 
   /* ---------------- render ---------------- */
 
   return (
-    <div>
+    <div className="game-col">
       <div className="hud">
         <div className="title-block">
           <div className="day-title">{S.day.title}</div>

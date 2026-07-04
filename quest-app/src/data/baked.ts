@@ -1,8 +1,8 @@
-import type { Day, Lang } from '../types'
+import type { Day } from '../types'
 
 /* Built-in starter quests — playable with no API key, and the fallback
    when Haiku generation fails. */
-export const BAKED: Record<Lang, Day> = {
+export const BAKED: Record<'ja' | 'zh', Day> = {
 ja: {
   title: '雨の日の部屋 — The Rainy Day Room',
   theme: 'tatami',

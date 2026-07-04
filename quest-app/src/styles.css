@@ -5,16 +5,16 @@
   --verb:#7A4B8A; --adj:#B8923A; --emotion:#C1457A; --shadow: rgba(28,27,25,0.35);
 }
 *{box-sizing:border-box;}
-html,body{margin:0;height:100%;background:var(--sumi);}
+html,body{margin:0;height:100%;background:var(--washi);}
 body{ font-family:'Zen Maru Gothic',sans-serif; color:var(--sumi); min-height:100%; overscroll-behavior:none; }
-#root{ display:flex; justify-content:center; min-height:100vh; padding:10px; }
+#root{ min-height:100vh; min-height:100dvh; }
 .app-frame{
-  width:100%; max-width:920px;
+  width:100%; min-height:100vh; min-height:100dvh;
   background: radial-gradient(circle at 15% 10%, rgba(255,255,255,0.5), transparent 40%),
               radial-gradient(circle at 85% 90%, rgba(255,255,255,0.35), transparent 45%), var(--washi);
-  border:3px solid var(--sumi); border-radius:6px; padding:12px 14px 18px; position:relative;
-  box-shadow:0 10px 40px rgba(0,0,0,0.5); align-self:flex-start;
+  padding:12px clamp(10px, 3vw, 30px) 22px; position:relative;
 }
+.game-col{ max-width:1280px; margin:0 auto; }
 h1{ font-family:'Shippori Mincho',serif; font-size:22px; letter-spacing:2px; margin:0 0 2px; text-align:center; }
 .subtitle{ text-align:center; font-size:11.5px; color:var(--aizome); margin-bottom:10px; }
 
@@ -32,7 +32,11 @@ button{ font-family:'Zen Maru Gothic',sans-serif; cursor:pointer; }
 .btn:disabled{ opacity:.45; cursor:not-allowed; transform:none; }
 
 /* ---------- HOME ---------- */
-.home{ text-align:center; padding:10px 0 20px; }
+.home{
+  text-align:center; padding:10px 0 20px;
+  min-height:calc(100vh - 70px); min-height:calc(100dvh - 70px);
+  display:flex; flex-direction:column; justify-content:center;
+}
 .home-cards{ display:flex; justify-content:center; gap:22px; margin:22px 0 10px; flex-wrap:wrap; }
 .lang-card{
   width:220px; padding:22px 14px 18px; background:var(--card-bg);
@@ -64,18 +68,28 @@ button{ font-family:'Zen Maru Gothic',sans-serif; cursor:pointer; }
 .wdot.done{ background:var(--gold); color:#fff; transform:scale(1.1); }
 .hud-btns{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
 .streak-chip{ font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; background:var(--card-bg); border:2px solid var(--sumi); border-radius:20px; padding:3px 10px; }
+.streak-chip.timer.low{ background:var(--vermillion); color:#fff; animation:timerPulse 1s ease-in-out infinite; }
+@keyframes timerPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
 
 .stage-wrap{ position:relative; display:flex; justify-content:center; }
 .stage{
   image-rendering:pixelated;
   border:3px solid var(--sumi); border-radius:6px; background:#000;
   box-shadow:0 6px 18px var(--shadow);
-  width:100%; max-width:768px; display:block; aspect-ratio:4/3;
-  touch-action:none;
+  display:block; aspect-ratio:4/3; touch-action:none;
+  width:100%; max-width:100%;   /* actual size set by JS to fill the viewport */
 }
 .controls-hint{ text-align:center; font-size:11px; color:#777; margin-top:7px; letter-spacing:.5px; }
 .controls-hint b{ font-family:'JetBrains Mono',monospace; background:var(--card-bg); border:1.5px solid var(--sumi); border-radius:4px; padding:0 5px; font-size:10px; }
 @media (pointer:coarse){ .controls-hint{ display:none; } }
+
+/* scene label over the canvas */
+.scene-chip{
+  position:absolute; top:10px; left:10px; z-index:10;
+  background:var(--card-bg); border:2px solid var(--sumi); border-radius:6px;
+  padding:3px 10px; font-family:'Shippori Mincho',serif; font-weight:700; font-size:13px;
+  box-shadow:0 2px 0 var(--sumi); pointer-events:none; letter-spacing:.5px;
+}
 
 /* ---------- OVERLAYS ---------- */
 .overlay{
@@ -177,18 +191,81 @@ button{ font-family:'Zen Maru Gothic',sans-serif; cursor:pointer; }
 
 /* toast */
 .toast{
-  position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
-  background:var(--sumi); color:var(--washi); font-size:12px; font-weight:700;
-  padding:7px 16px; border-radius:20px; z-index:80; opacity:0; transition:opacity .3s;
-  pointer-events:none; max-width:92vw; text-align:center;
+  position:fixed; top:64px; left:50%; transform:translateX(-50%);
+  background:var(--sumi); color:var(--washi); font-size:13.5px; font-weight:700;
+  padding:10px 20px; border-radius:12px; z-index:80; opacity:0; transition:opacity .3s, top .3s;
+  pointer-events:none; max-width:min(92vw, 560px); text-align:center;
+  border:2px solid var(--gold); box-shadow:0 6px 18px rgba(0,0,0,0.35); line-height:1.5;
 }
+.toast.show{ top:72px; }
 .toast.show{ opacity:1; }
+
+/* ---------- DIGLOT TEXT ---------- */
+.jaw{
+  font-family:'Shippori Mincho',serif; font-weight:700; color:var(--vermillion);
+  background:rgba(184,146,58,0.14); border-bottom:2px dotted var(--gold);
+  padding:0 2px; border-radius:3px; cursor:pointer; font-size:1.06em;
+}
+.jaw:hover{ background:rgba(184,146,58,0.3); }
+.jaw-sym{ font-size:.82em; opacity:.75; font-weight:600; }
+.enw{ font-weight:700; color:var(--aizome); }
+
+/* ---------- FLIP CARDS (learn phase) ---------- */
+.panel.wide{ max-width:640px; }
+.cards-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:6px; }
+@media (max-width:560px){ .cards-grid{ grid-template-columns:repeat(2,1fr); } }
+.flip-card{ perspective:700px; cursor:pointer; height:112px; }
+.flip-inner{ position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .35s; }
+.flip-card.flipped .flip-inner{ transform:rotateY(180deg); }
+.flip-face{
+  position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  border:2px solid var(--sumi); border-radius:9px; background:var(--card-bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  box-shadow:0 2px 0 var(--sumi);
+}
+.flip-face.back{ transform:rotateY(180deg); background:var(--aizome); color:#fff; }
+.day-intro{
+  font-style:italic; font-size:12.5px; line-height:1.7; color:#5a5347;
+  background:rgba(184,146,58,0.1); border-left:3px solid var(--gold);
+  padding:8px 12px; border-radius:0 8px 8px 0; margin-bottom:10px;
+}
+.fc-ja{ font-family:'Shippori Mincho',serif; font-size:26px; font-weight:700; }
+.fc-reading{ font-size:11px; color:var(--aizome); font-weight:700; }
+.fc-en{ font-size:16px; font-weight:700; text-align:center; padding:0 4px; }
+.fc-romaji{ font-family:'JetBrains Mono',monospace; font-size:10px; opacity:.8; }
+
+/* ---------- NPC DIALOG ---------- */
+.npc-name{
+  display:inline-block; font-family:'Shippori Mincho',serif; font-weight:700; font-size:14px;
+  background:var(--sumi); color:var(--washi); border-radius:5px; padding:2px 10px; margin-bottom:8px;
+}
+.npc-line{ font-size:14.5px; line-height:1.75; }
+
+/* ---------- QUEST LOG ---------- */
+.quest-row{ gap:8px; }
+.q-status{
+  width:22px; height:22px; border-radius:50%; border:2px solid var(--sumi); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+  background:var(--card-bg); font-family:'JetBrains Mono',monospace;
+}
+.q-status.done{ background:var(--moss); color:#fff; }
+.q-desc{ font-size:12.5px; line-height:1.5; flex:1; }
+.q-loc{ font-size:9.5px; color:#999; font-family:'JetBrains Mono',monospace; white-space:nowrap; }
+.q-progress{ display:block; margin-top:3px; }
+.q-bar{
+  display:block; height:6px; background:var(--washi-dk); border:1px solid var(--sumi);
+  border-radius:4px; overflow:hidden; max-width:180px;
+}
+.q-bar > span{ display:block; height:100%; background:var(--moss); transition:width .3s; }
+
+/* story beat popup */
+.beat-text{ font-size:16.5px; line-height:1.75; text-align:center; font-weight:700; padding:6px 2px 0; }
+.beat-hint{ text-align:center; font-size:10px; color:#999; margin-top:8px; font-family:'JetBrains Mono',monospace; }
 
 /* ---------- TOUCH CONTROLS ---------- */
 .touch-controls{ display:none; }
 @media (pointer:coarse){
   .touch-controls{ display:block; }
-  #root{ padding-bottom:150px; } /* room for the controls */
 }
 .joy-base{
   position:fixed; left:16px; bottom:20px; width:120px; height:120px; border-radius:50%;

@@ -9,9 +9,9 @@ export function todayStr(): string {
 function defaultProg(): Progress {
   return {
     streak: 0, lastDone: null, daysDone: 0,
-    known: { ja: [], zh: [] },
-    vocab: { ja: {}, zh: {} },
-    companions: { ja: {}, zh: {} }
+    known: { ja: [], zh: [], de: [] },
+    vocab: { ja: {}, zh: {}, de: {} },
+    companions: { ja: {}, zh: {}, de: {} }
   }
 }
 
