@@ -1,62 +1,55 @@
-import type { Lang } from '../types'
-import { getWorldProgFor } from '../lib/worldStorage'
+import { SAY_LANGS } from '../data/saygoodbye'
+import type { SayLang } from '../data/saygoodbye'
+import { getProgFor } from '../lib/sayState'
 
 interface Props {
-  onStart: (lang: Lang) => void
-  onOpenVocab: () => void
+  onStart: (lang: SayLang) => void
+  onOpenDays: () => void
   onOpenSettings: () => void
-  onReset: () => void
-  onOpenEpisodes: () => void
   musicOn: boolean
   onToggleMusic: () => void
 }
 
-const CARDS: Array<{ lang: Lang; seal: string; big: string; name: string }> = [
-  { lang: 'ja', seal: '日', big: '日本語', name: 'Japanese' },
-  { lang: 'zh', seal: '中', big: '中文', name: 'Mandarin Chinese' },
-  { lang: 'de', seal: '独', big: 'Deutsch', name: 'German' }
-]
-
-export default function HomeScreen({ onStart, onOpenVocab, onOpenSettings, onReset, onOpenEpisodes, musicOn, onToggleMusic }: Props) {
-  const progs = CARDS.map(c => getWorldProgFor(c.lang))
-  const totalWords = progs.reduce((a, p) => a + p.learnedIds.length, 0)
-  const totalDays = progs.reduce((a, p) => a + p.daysDone, 0)
+export default function HomeScreen({ onStart, onOpenDays, onOpenSettings, musicOn, onToggleMusic }: Props) {
+  const progs = SAY_LANGS.map(l => getProgFor(l.lang))
+  const seasons = progs.reduce((a, p) => a + p.seasons, 0)
+  const words = progs.reduce((a, p) => a + p.learned.length, 0)
   const bestStreak = Math.max(...progs.map(p => p.streak))
 
   return (
     <div className="home">
-      <h1>言葉クエスト <span style={{ fontSize: 14, color: 'var(--gold)' }}>WORD QUEST</span></h1>
+      <h1>Choose a language you want to learn</h1>
       <div className="subtitle">
-        Eight words a day. One town, three languages, endless little disasters.
+        This game is a <b>reverse diglot weave</b>: every story begins fully in the language
+        you're learning, and each day the words you master turn into English before your eyes —
+        until the whole town makes sense and you can finish your mission.
       </div>
 
       <div className="home-cards">
-        {CARDS.map((c, i) => (
-          <div className="lang-card" key={c.lang} onClick={() => onStart(c.lang)}>
-            <div className="seal">{c.seal}</div>
-            <div className="big" style={c.lang === 'de' ? { fontSize: 34 } : undefined}>{c.big}</div>
-            <div className="name">{c.name}</div>
-            <div className="lvl">Day {progs[i].dayNumber} · {progs[i].learnedIds.length} words learned</div>
+        {SAY_LANGS.map((l, i) => (
+          <div className="lang-card" key={l.lang} onClick={() => onStart(l.lang)}>
+            <div className="seal">{l.big}</div>
+            <div className="big" style={{ fontSize: 26 }}>{l.label.split(' ')[0]}</div>
+            <div className="name">{l.label.split(' ').slice(1).join(' ')}</div>
+            <div className="lvl">{progs[i].learned.length ? `${progs[i].learned.length} words woven` : 'Start fresh'}</div>
           </div>
         ))}
       </div>
 
       <div className="home-stats">
-        <div><b>{bestStreak}</b>best streak 連続</div>
-        <div><b>{totalWords}</b>words learned 習得</div>
-        <div><b>{totalDays}</b>days cleared 完了</div>
+        <div><b>{bestStreak}</b>best streak</div>
+        <div><b>{words}</b>words learned</div>
+        <div><b>{seasons}</b>stories finished</div>
       </div>
 
       <div className="gearline">
         <button className="btn small" onClick={onToggleMusic}>{musicOn ? '🎵 Music on' : '🔇 Music off'}</button>
-        <button className="btn small" onClick={onOpenVocab}>📖 Collection · 図鑑</button>
+        <button className="btn small" onClick={onOpenDays}>🎬 Days</button>
         <button className="btn small" onClick={onOpenSettings}>⚙ Settings</button>
-        <button className="btn small" onClick={onOpenEpisodes}>🎬 Episodes</button>
-        <button className="btn small danger" onClick={onReset}>🔄 Start over</button>
       </div>
 
       <div className="home-foot">
-        The same ten episodes, the same town — in every language you pick.
+        The same little town, in every language you pick. Be nice. Say goodbye.
       </div>
     </div>
   )

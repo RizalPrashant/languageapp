@@ -1,42 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Lang } from './types'
+import { useCallback, useRef, useState } from 'react'
 import HomeScreen from './components/HomeScreen'
-import WorldScreen from './components/WorldScreen'
-import { SettingsOverlay, WorldVocabOverlay } from './components/overlays'
-import { clearWorldProgress } from './lib/worldStorage'
-import { conceptToId, loadBank, setLang } from './lib/bank'
-import { EPISODES } from './data/episodes'
-import EpisodeSelect from './components/EpisodeSelect'
+import StoryScreen from './components/StoryScreen'
+import TownScreen from './components/TownScreen'
+import { Overlay, SettingsOverlay } from './components/overlays'
+import { CAST, SAY_LANGS, type SayLang } from './data/saygoodbye'
+import { FINAL_DAY, getProgFor, keyOf, newToday, resetAllSay, saveProg, saveToday, setSayLang } from './lib/sayState'
 import { musicEnabled, setMusicEnabled, startMusic } from './lib/music'
 
 export default function App() {
-  const [screen, setScreen] = useState<'home' | 'world'>('home')
-  const [worldKey, setWorldKey] = useState(0)
-  const [bankReady, setBankReady] = useState(false)
-
-  useEffect(() => {
-    loadBank().then(ok => {
-      setBankReady(true)
-      setWorldKey(k => k + 1)   // re-render stats with the full bank
-      if (!ok) console.warn('running on starter bank')
-    })
-    // browsers require a user gesture before audio: arm a one-time starter
-    const arm = () => { startMusic(); removeEventListener('pointerdown', arm); removeEventListener('keydown', arm) }
-    addEventListener('pointerdown', arm)
-    addEventListener('keydown', arm)
-    return () => { removeEventListener('pointerdown', arm); removeEventListener('keydown', arm) }
-  }, [])
-
+  const [screen, setScreen] = useState<'home' | 'stories' | 'town'>('home')
+  const [lang, setLang] = useState<SayLang>('ja')
+  const [townKey, setTownKey] = useState(0)
   const [musicOn, setMusicOn] = useState(musicEnabled())
-  function toggleMusic() {
-    const next = !musicOn
-    setMusicOn(next)
-    setMusicEnabled(next)
-    showToast(next ? '🎵 Music on' : '🔇 Music off')
-  }
+  const [daysOpen, setDaysOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [epSelectOpen, setEpSelectOpen] = useState(false)
-  const [vocabOpen, setVocabOpen] = useState(false)
   const [toast, setToast] = useState<{ msg: string; id: number } | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
 
@@ -46,72 +23,95 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), 3600)
   }, [])
 
-  function startLang(lang: Lang) {
-    if (lang === 'ja' && !bankReady) {
-      showToast('Loading the word bank… one second.')
-      return
-    }
-    setLang(lang)
-    setWorldKey(k => k + 1)
-    setScreen('world')
-  }
-
-  /* TEST MODE: jump to any episode as if every previous one was cleared. */
-  function jumpToEpisode(lang: Lang, ep: number) {
-    if (lang === 'ja' && !bankReady) {
-      showToast('Loading the word bank… one second.')
-      return
-    }
-    setLang(lang)
-    const learnedIds: number[] = []
-    for (const e of EPISODES) {
-      if (e.ep >= ep) continue
-      for (const w of e.words) {
-        const id = conceptToId(w)
-        if (id !== undefined && !learnedIds.includes(id)) learnedIds.push(id)
-      }
-    }
-    const prog = { dayNumber: ep, streak: ep - 1, lastDone: null, daysDone: ep - 1, learnedIds }
-    localStorage.setItem(`kq2_${lang}_progress`, JSON.stringify(prog))
-    localStorage.removeItem(`kq2_${lang}_today`)
-    if (lang === 'ja') { localStorage.removeItem('kq2_today'); localStorage.removeItem('kq2_progress') }
-    setEpSelectOpen(false)
-    setWorldKey(k => k + 1)
-    setScreen('world')
-    showToast(`🎬 Episode ${ep} — ${learnedIds.length} earlier words marked learned`)
+  function toggleMusic() {
+    const next = !musicOn
+    setMusicOn(next)
+    setMusicEnabled(next)
+    if (next) startMusic()
+    showToast(next ? '🎵 Music on' : '🔇 Music off')
   }
 
   function resetAll() {
-    if (!confirm("Start over from Day 1?\n\nThis wipes your streak, every learned word and today's quests. Your API key is kept.")) return
-    clearWorldProgress()
+    if (!confirm('Start over from Day 1 in every language? This wipes all progress.')) return
+    resetAllSay()
     setSettingsOpen(false)
     setScreen('home')
-    setWorldKey(k => k + 1)
-    showToast('A fresh start — Day 1 awaits. 初めから！')
+    showToast('A fresh loop. Day 1 awaits.')
+  }
+
+  function chooseLang(l: SayLang) {
+    setLang(l)
+    setSayLang(l)
+    setScreen('stories')
+  }
+
+  function playStory() {
+    setTownKey(k => k + 1)
+    setScreen('town')
+  }
+
+  /* dev: jump any language to any day, as if all earlier days were cleared */
+  function jumpTo(l: SayLang, day: number) {
+    setLang(l)
+    setSayLang(l)
+    const prog = getProgFor(l)
+    prog.day = day
+    prog.learned = []
+    for (const c of CAST) for (let d = 1; d < day && d <= 8; d++) prog.learned.push(keyOf(c.id, d))
+    saveProg(prog)
+    saveToday(newToday(day))
+    setDaysOpen(false)
+    setTownKey(k => k + 1)
+    setScreen('town')
+    showToast(`🎬 Day ${day} — earlier days marked learned`)
   }
 
   return (
     <div className="app-frame">
-      {screen === 'home' ? (
+      {screen === 'home' && (
         <HomeScreen
-          onStart={startLang}
-          onOpenVocab={() => setVocabOpen(true)}
+          onStart={chooseLang}
+          onOpenDays={() => setDaysOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
-          onReset={resetAll}
-          onOpenEpisodes={() => setEpSelectOpen(true)}
           musicOn={musicOn}
           onToggleMusic={toggleMusic}
         />
-      ) : (
-        <WorldScreen key={worldKey} onHome={() => setScreen('home')} showToast={showToast}
+      )}
+      {screen === 'stories' && (
+        <StoryScreen lang={lang} onPlay={playStory} onBack={() => setScreen('home')}
           musicOn={musicOn} onToggleMusic={toggleMusic} />
+      )}
+      {screen === 'town' && (
+        <TownScreen key={townKey} onHome={() => setScreen('home')} onStories={() => setScreen('stories')}
+          showToast={showToast} musicOn={musicOn} onToggleMusic={toggleMusic} />
       )}
 
       {settingsOpen && (
         <SettingsOverlay onClose={() => setSettingsOpen(false)} onReset={resetAll} showToast={showToast} />
       )}
-      {vocabOpen && <WorldVocabOverlay onClose={() => setVocabOpen(false)} />}
-      {epSelectOpen && <EpisodeSelect onClose={() => setEpSelectOpen(false)} onJump={jumpToEpisode} />}
+
+      {daysOpen && (
+        <Overlay fixed>
+          <div className="panel" style={{ maxWidth: 520 }}>
+            <div className="corner-seal">試</div>
+            <h2>🎬 Day Select <span style={{ fontSize: 12, color: 'var(--gold)' }}>TEST</span></h2>
+            <div style={{ fontSize: 12, opacity: .75, marginBottom: 10 }}>
+              Jumps that language to a day as if every earlier day was cleared. Overwrites its save.
+            </div>
+            {SAY_LANGS.map(l => (
+              <div key={l.lang} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                <span style={{ width: 84, fontWeight: 700 }}>{l.label.split(' ')[0]}</span>
+                {Array.from({ length: FINAL_DAY }, (_, i) => i + 1).map(d => (
+                  <button key={d} className="btn small" onClick={() => jumpTo(l.lang, d)}>{d}</button>
+                ))}
+              </div>
+            ))}
+            <div className="panel-actions">
+              <button className="btn" onClick={() => setDaysOpen(false)}>Close</button>
+            </div>
+          </div>
+        </Overlay>
+      )}
 
       <div className={'toast' + (toast ? ' show' : '')}>{toast?.msg}</div>
     </div>
