@@ -117,7 +117,29 @@ const ATLAS_OBJS: Record<string, { sx: number; sy: number; w: number; h: number 
   nightstand_pack: { sx: 744, sy: 524, w: 20, h: 28 },
   rug_gold: { sx: 688, sy: 560, w: 36, h: 38 },
   rug_small: { sx: 744, sy: 558, w: 24, h: 24 },
-  window_pack: { sx: 256, sy: 176, w: 16, h: 16 }
+  window_pack: { sx: 256, sy: 176, w: 16, h: 16 },
+
+  /* Sunnyside pack: quest-area landmarks. Each themed "quest room" gets one
+     hero structure so it reads at a glance from across the screen. */
+  well: { sx: 576, sy: 304, w: 48, h: 48 },
+  tower_blue: { sx: 512, sy: 144, w: 48, h: 80 },
+  tower_green: { sx: 512, sy: 272, w: 48, h: 80 },
+  tower_orange: { sx: 512, sy: 400, w: 48, h: 80 },
+  tower_red: { sx: 512, sy: 528, w: 48, h: 80 },
+  tower_purple: { sx: 512, sy: 656, w: 48, h: 80 },
+
+  /* market clutter */
+  crate: { sx: 528, sy: 144, w: 16, h: 16 },
+  crate2: { sx: 560, sy: 144, w: 16, h: 16 },
+  barrel: { sx: 672, sy: 160, w: 16, h: 16 },
+  barrel_red: { sx: 704, sy: 192, w: 16, h: 16 },
+  chest_orange: { sx: 576, sy: 480, w: 16, h: 16 },
+  bench_wood: { sx: 720, sy: 608, w: 16, h: 16 },
+  rug_shop: { sx: 704, sy: 560, w: 48, h: 32 },
+  sign_board: { sx: 704, sy: 160, w: 32, h: 16 },
+  fence_gate: { sx: 608, sy: 80, w: 16, h: 32 },
+  ladder: { sx: 672, sy: 192, w: 16, h: 16 },
+  bush: { sx: 784, sy: 16, w: 16, h: 16 },
 }
 
 let sceneC: HTMLCanvasElement | null = null

@@ -58,20 +58,20 @@ function Sentence({ spk, learned, onHint }: { spk: string; learned: Set<string>;
     <span className="rubyline">
       {sl.chunks.map((c, i) => {
         if (c.t !== undefined) return (
-          <span key={i} className="chunk glue"><span className="rd">{'\u00A0'}</span><span className="sc">{c.t}</span></span>
+          <span key={i} className="chunk glue"><span className="rd">{' '}</span><span className="sc">{c.t}</span></span>
         )
         const k = sl.keys.find(k => k.d === c.d)!
         const isL = learned.has(keyOf(spk, c.d!))
         if (!isL) return (
           <span key={i} className="chunk">
-            <span className="rd">{c.s ? c.n : '\u00A0'}</span>
+            <span className="rd">{c.s ? c.n : ' '}</span>
             <span className="sc">{c.s || c.n}</span>
           </span>
         )
         return (
           <span key={i} className="chunk gold"
             onPointerDown={e => { e.preventDefault(); onHint(`${c.e || k.en} = ${c.n}${c.s ? `（${c.s}）` : ''}`) }}>
-            <span className="rd">{c.s || '\u00A0'}</span>
+            <span className="rd">{c.s || ' '}</span>
             <span className="sc">{c.e || k.en}</span>
           </span>
         )
@@ -84,6 +84,8 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
   const todayRef = useRef<SayToday>(loadToday() || freshToday())
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const playerRef = useRef<PlayerState>({ x: START_POS.x * TILE, y: START_POS.y * TILE, dir: 'up', frame: 0, ftick: 0, moving: false })
+  const locIdRef = useRef<string>(START_LOC)
+  const [locId, setLocId] = useState<string>(START_LOC)
   const keysRef = useRef<Record<string, boolean>>({})
   const joyRef = useRef({ dx: 0, dy: 0 })
   const sparklesRef = useRef<Sparkle[]>([])
@@ -250,6 +252,8 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
     todayRef.current = freshToday()
     failFired.current = false
     playerRef.current = { x: START_POS.x * TILE, y: START_POS.y * TILE, dir: 'up', frame: 0, ftick: 0, moving: false }
+    locIdRef.current = START_LOC
+    setLocId(START_LOC)
     setDialog(null)
     setTimeLeft(TIMER_SEC)
     setPhase('brief')
@@ -261,6 +265,8 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
     todayRef.current = freshToday()
     failFired.current = false
     playerRef.current = { x: START_POS.x * TILE, y: START_POS.y * TILE, dir: 'up', frame: 0, ftick: 0, moving: false }
+    locIdRef.current = START_LOC
+    setLocId(START_LOC)
     setDialog(null)
     setTimeLeft(TIMER_SEC)
     setPhase('brief')
@@ -293,7 +299,7 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
 
     const step = () => {
       const player = playerRef.current
-      const loc = WORLD[START_LOC]
+      let loc = WORLD[locIdRef.current]
       setActiveDay(todayRef.current.day)
 
       if (!overlayRef.current) {
@@ -316,7 +322,16 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
           if (!feet(player.x, ny).some(([a, b]) => blockedAtWorld(loc, a, b))) player.y = ny
           player.ftick++
           if (player.ftick > 9) { player.frame = 1 - player.frame; player.ftick = 0 }
-          warpAt(loc, player.x, player.y + 5)  // single-screen town: no warps, kept for future
+
+          // stepping onto a warp tile moves the player to another room
+          const w = warpAt(loc, player.x, player.y + 5)
+          if (w && WORLD[w.to]) {
+            locIdRef.current = w.to
+            loc = WORLD[w.to]
+            player.x = w.tx * TILE + 8
+            player.y = w.ty * TILE + 8
+            setLocId(w.to)
+          }
         } else {
           player.frame = 0
         }
@@ -401,7 +416,7 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
 
       <div className="stage-wrap" ref={wrapRef}>
         <canvas ref={canvasRef} className="stage" width={COLS * TILE * 4} height={ROWS * TILE * 4} />
-        <div className="scene-chip">{WORLD[START_LOC].label}</div>
+        <div className="scene-chip">{WORLD[locId].label}</div>
 
         {/* -------- day brief -------- */}
         {phase === 'brief' && (
