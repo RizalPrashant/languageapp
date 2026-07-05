@@ -83,7 +83,48 @@ export interface WorldFrame {
   night?: boolean             // evening episode: cool blue tint over the world
 }
 
-export function drawWorld(ctx: CanvasRenderingContext2D, f: WorldFrame): void {
+/* Sunnyside 16px tileset (user-licensed pack) — outdoor terrain + trees.
+   Loaded from public/tiles/sunnyside16.png; missing file = procedural look. */
+let tilesImg: HTMLImageElement | null = null
+let tilesTried = false
+function tilesReady(): boolean {
+  if (!tilesTried) {
+    tilesTried = true
+    const img = new Image()
+    img.onload = () => { tilesImg = img }
+    img.src = `${import.meta.env.BASE_URL}tiles/sunnyside16.png`
+  }
+  return !!tilesImg
+}
+/* atlas tile coords (tx,ty in 16px units) */
+const AT_GRASS: Array<[number, number]> = [[1, 1], [1, 1], [1, 1], [1, 1], [1, 2], [2, 2]]
+const AT_DIRT: Array<[number, number]> = [[20, 7], [21, 7], [20, 8], [21, 8]]
+const AT_WATER: [number, number] = [13, 20]
+const AT_PLANKS: Array<[number, number]> = [[10, 30], [12, 30], [11, 30], [11, 29]]
+/* larger objects cut straight from the atlas (px rect + draw size) */
+const ATLAS_OBJS: Record<string, { sx: number; sy: number; w: number; h: number }> = {
+  tree: { sx: 818, sy: 90, w: 32, h: 52 },
+  tree_b: { sx: 818, sy: 90, w: 32, h: 52 },
+  tree_c: { sx: 818, sy: 90, w: 32, h: 52 },
+  tree_hill: { sx: 818, sy: 90, w: 32, h: 52 },
+  tree_hill_b: { sx: 818, sy: 90, w: 32, h: 52 },
+  tree_street1: { sx: 818, sy: 90, w: 32, h: 52 },
+  tree_street2: { sx: 818, sy: 90, w: 32, h: 52 },
+  rug_red: { sx: 646, sy: 568, w: 32, h: 32 },
+  bed_pack: { sx: 624, sy: 528, w: 24, h: 32 },
+  cabinet_pack: { sx: 656, sy: 526, w: 20, h: 26 },
+  cabinet_pack_b: { sx: 676, sy: 526, w: 20, h: 26 },
+  nightstand_pack: { sx: 744, sy: 524, w: 20, h: 28 },
+  rug_gold: { sx: 688, sy: 560, w: 36, h: 38 },
+  rug_small: { sx: 744, sy: 558, w: 24, h: 24 },
+  window_pack: { sx: 256, sy: 176, w: 16, h: 16 }
+}
+
+let sceneC: HTMLCanvasElement | null = null
+
+export function drawWorld(out: CanvasRenderingContext2D, f: WorldFrame): void {
+  if (!sceneC) { sceneC = document.createElement('canvas'); sceneC.width = COLS * TILE; sceneC.height = ROWS * TILE }
+  const ctx = sceneC.getContext('2d')!
   const { loc, player } = f
   const th = THEMES[loc.theme]
 
@@ -107,6 +148,37 @@ export function drawWorld(ctx: CanvasRenderingContext2D, f: WorldFrame): void {
   for (let ty = 0; ty < ROWS; ty++) {
     for (let tx = 0; tx < COLS; tx++) {
       const t = tileAt(loc, tx, ty)
+      if (loc.outdoor && tilesReady() && tilesImg) {
+        const hash = (tx * 7 + ty * 13 + ((tx * ty) | 0)) % AT_GRASS.length
+        const [gx, gy] = AT_GRASS[hash]
+        ctx.drawImage(tilesImg, gx * 16, gy * 16, 16, 16, tx * TILE, ty * TILE, TILE, TILE)
+        if (t === '#') {
+          // pack-toned bush border over grass
+          ctx.fillStyle = '#2C5E38'
+          ctx.fillRect(tx * TILE, ty * TILE, TILE, TILE)
+          ctx.fillStyle = '#417B4C'
+          ctx.fillRect(tx * TILE + 1, ty * TILE + 1, TILE - 2, TILE - 2)
+          ctx.fillStyle = '#356B41'
+          ctx.fillRect(tx * TILE + 3, ty * TILE + 4, 4, 3)
+          ctx.fillRect(tx * TILE + 9, ty * TILE + 9, 4, 3)
+        } else if (t === '~') {
+          ctx.drawImage(tilesImg, AT_WATER[0] * 16, AT_WATER[1] * 16, 16, 16, tx * TILE, ty * TILE, TILE, TILE)
+          ctx.fillStyle = '#9AB8D0'
+          const ripple = Math.floor(Date.now() / 400 + tx + ty) % 3
+          ctx.fillRect(tx * TILE + 3 + ripple, ty * TILE + 5, 4, 1)
+          ctx.fillRect(tx * TILE + 8, ty * TILE + 10 + (ripple % 2), 3, 1)
+        } else if (t === '=') {
+          const [dx, dy] = AT_DIRT[(tx + ty * 2) % 4]
+          ctx.drawImage(tilesImg, dx * 16, dy * 16, 16, 16, tx * TILE, ty * TILE, TILE, TILE)
+        }
+        continue
+      }
+      if (!loc.outdoor && (loc.theme === 'wood' || loc.theme === 'tatami') && t !== '#' && tilesReady() && tilesImg) {
+        const hash = (tx * 5 + ty * 11 + ((tx * ty) | 0)) % AT_PLANKS.length
+        const [pxx, pyy] = AT_PLANKS[hash]
+        ctx.drawImage(tilesImg, pxx * 16, pyy * 16, 16, 16, tx * TILE, ty * TILE, TILE, TILE)
+        continue
+      }
       if (t === '#') {
         if (loc.outdoor) {
           // hedge / fence border
@@ -146,8 +218,31 @@ export function drawWorld(ctx: CanvasRenderingContext2D, f: WorldFrame): void {
   }
   }
 
-  // warp markers
+  // flat floor decor (rugs, slippers…) — under everything that moves
+  for (const o of activeObjects(loc)) {
+    if (!o.deco) continue
+    const at = ATLAS_OBJS[o.sprite]
+    if (at) {
+      if (tilesImg) ctx.drawImage(tilesImg, at.sx, at.sy, at.w, at.h,
+        o.x * TILE - (at.w - 16) / 2, o.y * TILE - (at.h - 16) / 2, at.w, at.h)
+      // atlas not loaded yet: skip this frame rather than crash
+    } else if (SPRITES[o.sprite]) {
+      ctx.drawImage(spriteC(o.sprite), o.x * TILE, o.y * TILE)
+    }
+  }
+
+  // soft shadow where the floor meets the back wall (indoor depth)
+  if (!loc.outdoor) {
+    const ao = ctx.createLinearGradient(0, 2 * TILE, 0, 2 * TILE + 5)
+    ao.addColorStop(0, 'rgba(20,16,12,0.30)')
+    ao.addColorStop(1, 'rgba(20,16,12,0)')
+    ctx.fillStyle = ao
+    ctx.fillRect(TILE, 2 * TILE, (COLS - 2) * TILE, 5)
+  }
+
+  // warp markers (suppressed when floor decor — a doormat — marks the exit)
   for (const wp of activeWarps(loc)) {
+    if (activeObjects(loc).some(o => o.deco && o.x === wp.x && o.y === wp.y)) continue
     const wx = wp.x * TILE, wy = wp.y * TILE
     const pulse = Math.floor(Date.now() / 350) % 2
     ctx.fillStyle = pulse ? '#C1440E' : '#D96A38'
@@ -161,6 +256,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, f: WorldFrame): void {
   // drawables y-sorted: objects, npcs, player
   const drawables: Array<{ y: number; fn: () => void }> = []
   for (const o of activeObjects(loc)) {
+    if (o.deco) continue   // floor decor already drawn beneath everything
     const hasQuest = f.questTargets.has(o.id)
     if (o.wall) {
       drawObjSprite(ctx, o.sprite, o.x * TILE, 4, hasQuest)
@@ -202,9 +298,99 @@ export function drawWorld(ctx: CanvasRenderingContext2D, f: WorldFrame): void {
     ctx.textAlign = 'left'
     ctx.fillText('E', bx - 2, by + 8)
   }
+
+  /* ---------- in-scene light ---------- */
+  if (!f.night && !loc.outdoor) {
+    // sunbeam falling from any wall window onto the floor
+    for (const o of activeObjects(loc)) {
+      if (!o.wall || (o.sprite !== 'window' && o.sprite !== 'window_big' && o.sprite !== 'window_pack')) continue
+      const wx = o.x * TILE + 8
+      ctx.save()
+      ctx.globalCompositeOperation = 'lighter'
+      const beam = ctx.createLinearGradient(0, 16, 0, 122)
+      beam.addColorStop(0, 'rgba(255,214,150,0.20)')
+      beam.addColorStop(1, 'rgba(255,214,150,0)')
+      ctx.fillStyle = beam
+      ctx.beginPath()
+      ctx.moveTo(wx - 8, 16); ctx.lineTo(wx + 8, 16)
+      ctx.lineTo(wx + 26, 122); ctx.lineTo(wx - 26, 122)
+      ctx.closePath(); ctx.fill()
+      const pool = ctx.createRadialGradient(wx, 116, 2, wx, 116, 30)
+      pool.addColorStop(0, 'rgba(255,214,150,0.14)')
+      pool.addColorStop(1, 'rgba(255,214,150,0)')
+      ctx.fillStyle = pool
+      ctx.fillRect(wx - 32, 100, 64, 32)
+      ctx.restore()
+    }
+  }
+  if (f.night) {
+    // lamps cut warm pools through the night tint
+    for (const o of activeObjects(loc)) {
+      if (o.sprite !== 'lamp') continue
+      const lx = o.x * TILE + 8, ly = o.y * TILE + 4
+      ctx.save()
+      ctx.globalCompositeOperation = 'lighter'
+      const g = ctx.createRadialGradient(lx, ly, 2, lx, ly, 26)
+      g.addColorStop(0, 'rgba(255,200,120,0.45)')
+      g.addColorStop(1, 'rgba(255,200,120,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(lx - 28, ly - 28, 56, 56)
+      ctx.restore()
+    }
+  }
+
+  /* ---------- diorama composite (tilt-shift, grade, vignette) ---------- */
+  const W = out.canvas.width, H = out.canvas.height
+  const sc = H / (ROWS * TILE)
+  out.imageSmoothingEnabled = false
+  out.drawImage(sceneC!, 0, 0, W, H)
+
+  // tilt-shift: soft focus falloff at the top and bottom of the diorama
+  out.save()
+  out.imageSmoothingEnabled = true
+  const bands: Array<[number, number, number, number]> = [
+    [0, 18, 2.4, 0.5], [18, 12, 1.2, 0.28],
+    [162, 12, 1.2, 0.28], [174, 18, 2.4, 0.5]
+  ]
+  for (const [sy, sh, blur, alpha] of bands) {
+    out.filter = `blur(${(blur * sc).toFixed(1)}px)`
+    out.globalAlpha = alpha
+    out.drawImage(sceneC!, 0, sy, COLS * TILE, sh, 0, sy * sc, W, sh * sc)
+  }
+  out.filter = 'none'
+  out.globalAlpha = 1
+
+  // color grade
+  out.globalCompositeOperation = 'soft-light'
+  out.fillStyle = f.night ? 'rgba(80,100,170,0.16)' : 'rgba(255,196,130,0.14)'
+  out.fillRect(0, 0, W, H)
+  out.globalCompositeOperation = 'source-over'
+
+  // vignette
+  const v = out.createRadialGradient(W / 2, H * 0.44, H * 0.42, W / 2, H * 0.44, H * 0.85)
+  v.addColorStop(0, 'rgba(15,12,24,0)')
+  v.addColorStop(1, 'rgba(15,12,24,0.32)')
+  out.fillStyle = v
+  out.fillRect(0, 0, W, H)
+  out.restore()
 }
 
 function drawObjSprite(ctx: CanvasRenderingContext2D, sprite: string, x: number, y: number, quest: boolean): void {
+  const at = ATLAS_OBJS[sprite]
+  if (at && tilesImg) {
+    const dx = x - (at.w - 16) / 2
+    const dy = y + 16 - at.h
+    if (quest) {
+      const pulse = 2 + Math.sin(Date.now() / 300) * 1.5
+      ctx.fillStyle = 'rgba(193,68,14,0.22)'
+      ctx.fillRect(dx - pulse, dy - pulse, at.w + pulse * 2, at.h + pulse * 2)
+    }
+    ctx.drawImage(tilesImg, at.sx, at.sy, at.w, at.h, dx, dy, at.w, at.h)
+    if (quest) drawExclaim(ctx, x + 6, dy - 8)
+    return
+  }
+  if (at && !tilesImg) return   // atlas-only piece, image still loading
+  if (!SPRITES[sprite]) return  // unknown sprite: never crash the frame
   if (quest) {
     const pulse = 2 + Math.sin(Date.now() / 300) * 1.5
     ctx.fillStyle = 'rgba(193,68,14,0.22)'

@@ -22,7 +22,8 @@ for (const ep of EPISODES) {
     if (!bankJa.has(row[0])) err(`ep${ep.ep}: ja word ${row[0]} (${c}) not in ja bank`)
     if (!row[3] || !row[4]) err(`ep${ep.ep}: zh missing for "${c}"`)
     if (!row[5]) err(`ep${ep.ep}: de missing for "${c}"`)
-    if (seen.has(c)) err(`ep${ep.ep}: "${c}" already used in ep${seen.get(c)}`)
+    // reuse across episodes is allowed from season 8 on (review words)
+    if (seen.has(c) && ep.ep <= 70) err(`ep${ep.ep}: "${c}" already used in ep${seen.get(c)}`)
     else seen.set(c, ep.ep)
   }
   const questWords = new Set(ep.quests.map(q => q.word))

@@ -519,7 +519,7 @@ export default function WorldScreen({ onHome, showToast, musicOn, onToggleMusic 
       </div>
 
       <div className="stage-wrap" ref={wrapRef}>
-        <canvas ref={canvasRef} className="stage" width={COLS * TILE} height={ROWS * TILE} />
+        <canvas ref={canvasRef} className="stage" width={COLS * TILE * 4} height={ROWS * TILE * 4} />
         <div className="scene-chip">{WORLD[locId].label}</div>
 
         {/* -------- learn phase: flip cards -------- */}

@@ -858,7 +858,10 @@ import { SEASON4 } from './season4'
 import { SEASON5 } from './season5'
 import { SEASON6 } from './season6'
 import { SEASON7 } from './season7'
-EPISODES.push(...SEASON2, ...SEASON3, ...SEASON4, ...SEASON5, ...SEASON6, ...SEASON7)
+import { SEASON8 } from './season8'
+import { SEASON9 } from './season9'
+import { SEASON10 } from './season10'
+EPISODES.push(...SEASON2, ...SEASON3, ...SEASON4, ...SEASON5, ...SEASON6, ...SEASON7, ...SEASON8, ...SEASON9, ...SEASON10)
 
 export function episodeFor(day: number): Episode | undefined {
   return EPISODES.find(e => e.ep === day)

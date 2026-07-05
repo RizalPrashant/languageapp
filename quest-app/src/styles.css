@@ -73,7 +73,7 @@ button{ font-family:'Zen Maru Gothic',sans-serif; cursor:pointer; }
 
 .stage-wrap{ position:relative; display:flex; justify-content:center; }
 .stage{
-  image-rendering:pixelated;
+  image-rendering:auto;
   border:3px solid var(--sumi); border-radius:6px; background:#000;
   box-shadow:0 6px 18px var(--shadow);
   display:block; aspect-ratio:4/3; touch-action:none;

@@ -73,7 +73,9 @@ export function dealToday(): WorldToday {
     const fillQueue = due.filter(id => !ep.words.some(w => conceptToId(w) === id))
     for (const w of ep.words) {
       let id = conceptToId(w)
-      if (id === undefined || wordIds.includes(id) || learned.has(id)) {
+      // learned words stay in the episode as REVIEW (seasons 8+ reuse words
+      // on purpose — spaced repetition); only true misses get substituted
+      if (id === undefined || wordIds.includes(id)) {
         id = fillQueue.shift()
         if (id === undefined) continue
         wordIds.push(id)
@@ -209,7 +211,7 @@ export function blockedAtWorld(loc: WorldLocation, px: number, py: number): bool
   if (t === '#' || t === '~') return true
   // objects block their tile (wall-mounted ones don't — they're on the wall)
   for (const o of activeObjects(loc)) {
-    if (!o.wall && o.x === tx && o.y === ty) return true
+    if (!o.wall && !o.deco && o.x === tx && o.y === ty) return true
   }
   // NPCs block their tile
   for (const n of activeNpcs(loc.id)) {
@@ -239,6 +241,7 @@ export function nearestTarget(loc: WorldLocation, px: number, py: number): Targe
     if (d < bestD) { bestD = d; best = { kind: 'npc', npc: n, cx, cy } }
   }
   for (const o of activeObjects(loc)) {
+    if (o.deco) continue
     const cx = o.x * TILE + 8
     const cy = o.wall ? 24 : o.y * TILE + 8
     const d = Math.hypot(px - cx, py + 4 - cy)
