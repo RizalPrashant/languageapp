@@ -8,8 +8,17 @@ export const COLS = 16
 export const ROWS = 12
 
 export function tileAt(loc: WorldLocation, tx: number, ty: number): string {
-  if (tx < 0 || ty < 0 || tx >= COLS || ty >= ROWS) return '#'
+  if (tx < 0 || ty < 0 || ty >= loc.tiles.length || tx >= loc.tiles[0].length) return '#'
   return loc.tiles[ty][tx]
+}
+
+/* collision editor: rewrite one tile in place; returns true if it changed */
+export function setTileChar(loc: WorldLocation, tx: number, ty: number, ch: string): boolean {
+  if (tx < 0 || ty < 0 || ty >= loc.tiles.length || tx >= loc.tiles[0].length) return false
+  const row = loc.tiles[ty]
+  if (row[tx] === ch) return false
+  loc.tiles[ty] = row.slice(0, tx) + ch + row.slice(tx + 1)
+  return true
 }
 
 /* characters/objects can be day-gated; the screen sets this each frame */

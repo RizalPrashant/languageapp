@@ -142,6 +142,14 @@ const ATLAS_OBJS: Record<string, { sx: number; sy: number; w: number; h: number 
   bush: { sx: 784, sy: 16, w: 16, h: 16 },
 }
 
+/* collision grid overlay (red = blocked, blue = water). TownScreen owns
+   the G key and the click-to-edit logic; it flips this window flag. */
+function gridDebugOn(): boolean { return !!(window as any).__kqGrid }
+
+/* camera position of the last drawn frame — the editor uses it to map
+   mouse clicks on the canvas back to world tiles */
+export const LAST_CAM = { x: 0, y: 0 }
+
 let sceneC: HTMLCanvasElement | null = null
 
 export function drawWorld(out: CanvasRenderingContext2D, f: WorldFrame): void {
@@ -150,13 +158,27 @@ export function drawWorld(out: CanvasRenderingContext2D, f: WorldFrame): void {
   const { loc, player } = f
   const th = THEMES[loc.theme]
 
+  /* camera: the map can be bigger than the screen; follow the player,
+     clamped to the town edges. Same viewport, bigger world. */
+  const mapCols = loc.tiles[0].length
+  const mapRows = loc.tiles.length
+  const mapW = mapCols * TILE, mapH = mapRows * TILE
+  const VIEW_W = COLS * TILE, VIEW_H = ROWS * TILE
+  const camX = Math.max(0, Math.min(mapW - VIEW_W, Math.round(player.x - VIEW_W / 2)))
+  const camY = Math.max(0, Math.min(mapH - VIEW_H, Math.round(player.y - VIEW_H / 2)))
+  LAST_CAM.x = camX; LAST_CAM.y = camY
+  ctx.save()
+  ctx.translate(-camX, -camY)
+  const vx0 = Math.floor(camX / TILE), vy0 = Math.floor(camY / TILE)
+  const vx1 = Math.min(mapCols, vx0 + COLS + 1), vy1 = Math.min(mapRows, vy0 + ROWS + 1)
+
   // custom background image, if one exists for this location
   const bg = bgFor(loc.id)
   if (bg) {
-    ctx.drawImage(bg, 0, 0, COLS * TILE, ROWS * TILE)
+    ctx.drawImage(bg, 0, 0, mapW, mapH)
     // keep the water animated even over a painted pond
-    for (let ty = 0; ty < ROWS; ty++) {
-      for (let tx = 0; tx < COLS; tx++) {
+    for (let ty = vy0; ty < vy1; ty++) {
+      for (let tx = vx0; tx < vx1; tx++) {
         if (tileAt(loc, tx, ty) === '~') {
           ctx.fillStyle = 'rgba(154,184,208,0.55)'
           const ripple = Math.floor(Date.now() / 400 + tx + ty) % 3
@@ -167,8 +189,8 @@ export function drawWorld(out: CanvasRenderingContext2D, f: WorldFrame): void {
     }
   } else {
   // ground
-  for (let ty = 0; ty < ROWS; ty++) {
-    for (let tx = 0; tx < COLS; tx++) {
+  for (let ty = vy0; ty < vy1; ty++) {
+    for (let tx = vx0; tx < vx1; tx++) {
       const t = tileAt(loc, tx, ty)
       if (loc.outdoor && tilesReady() && tilesImg) {
         const hash = (tx * 7 + ty * 13 + ((tx * ty) | 0)) % AT_GRASS.length
@@ -259,7 +281,7 @@ export function drawWorld(out: CanvasRenderingContext2D, f: WorldFrame): void {
     ao.addColorStop(0, 'rgba(20,16,12,0.30)')
     ao.addColorStop(1, 'rgba(20,16,12,0)')
     ctx.fillStyle = ao
-    ctx.fillRect(TILE, 2 * TILE, (COLS - 2) * TILE, 5)
+    ctx.fillRect(TILE, 2 * TILE, (mapCols - 2) * TILE, 5)
   }
 
   // warp markers (suppressed when floor decor — a doormat — marks the exit)
@@ -302,7 +324,7 @@ export function drawWorld(out: CanvasRenderingContext2D, f: WorldFrame): void {
   // night tint
   if (f.night) {
     ctx.fillStyle = 'rgba(24, 32, 72, 0.32)'
-    ctx.fillRect(0, 0, COLS * TILE, ROWS * TILE)
+    ctx.fillRect(camX, camY, VIEW_W, VIEW_H)
   }
 
   // interaction bubble
@@ -360,6 +382,21 @@ export function drawWorld(out: CanvasRenderingContext2D, f: WorldFrame): void {
       ctx.restore()
     }
   }
+
+  // collision debug overlay (G)
+  if (gridDebugOn()) {
+    for (let ty = vy0; ty < vy1; ty++) {
+      for (let tx = vx0; tx < vx1; tx++) {
+        const t = tileAt(loc, tx, ty)
+        if (t === '#') { ctx.fillStyle = 'rgba(255,40,40,0.33)'; ctx.fillRect(tx * TILE, ty * TILE, TILE, TILE) }
+        else if (t === '~') { ctx.fillStyle = 'rgba(40,90,255,0.38)'; ctx.fillRect(tx * TILE, ty * TILE, TILE, TILE) }
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)'
+        ctx.strokeRect(tx * TILE + 0.5, ty * TILE + 0.5, TILE - 1, TILE - 1)
+      }
+    }
+  }
+
+  ctx.restore()
 
   /* ---------- diorama composite (tilt-shift, grade, vignette) ---------- */
   const W = out.canvas.width, H = out.canvas.height

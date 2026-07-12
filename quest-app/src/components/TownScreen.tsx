@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PlayerState, Sparkle } from '../types'
 import { START_LOC, START_POS, WORLD, type WorldNpc } from '../data/world'
-import { COLS, ROWS, TILE, blockedAtWorld, nearestTarget, setActiveDay, warpAt, type Target } from '../game/worldEngine'
-import { drawWorld } from '../game/worldRender'
+import { COLS, ROWS, TILE, blockedAtWorld, nearestTarget, setActiveDay, setTileChar, warpAt, type Target } from '../game/worldEngine'
+import { LAST_CAM, drawWorld } from '../game/worldRender'
 import { CAST, MISSION_DONE, PREMISE, PREMISE_TITLE, SENTENCES } from '../data/saygoodbye'
 import {
   FINAL_DAY, TIMER_SEC, WRONG_PENALTY, getProg, getSayLang, keyForDay, keyOf, learnedCount,
@@ -105,6 +105,11 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
   const [, setTick] = useState(0)
   const bump = () => setTick(t => t + 1)
 
+  /* collision editor (dev tool, toggled with G) */
+  const [editor, setEditor] = useState(false)
+  const [mapDirty, setMapDirty] = useState(false)
+  const paintRef = useRef<string | null>(null)
+
   const T = todayRef.current
   const day = T.day
   overlayRef.current = phase !== 'run' || !!dialog
@@ -115,6 +120,49 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
     return t
   }
   function save() { saveToday(todayRef.current) }
+
+  /* ---------------- collision editor (G) ----------------
+     Click/drag on the canvas toggles blocked tiles over the painted map;
+     shift-click toggles water. Save posts the grid to the dev server,
+     which writes src/data/maps/{loc}.json — edits become the real map. */
+  function tileFromMouse(e: React.MouseEvent): [number, number] | null {
+    const cv = canvasRef.current
+    if (!cv) return null
+    const rect = cv.getBoundingClientRect()
+    const wx = (e.clientX - rect.left) * ((COLS * TILE) / rect.width) + LAST_CAM.x
+    const wy = (e.clientY - rect.top) * ((ROWS * TILE) / rect.height) + LAST_CAM.y
+    const loc = WORLD[locIdRef.current]
+    const tx = Math.floor(wx / TILE), ty = Math.floor(wy / TILE)
+    if (tx < 0 || ty < 0 || ty >= loc.tiles.length || tx >= loc.tiles[0].length) return null
+    return [tx, ty]
+  }
+  function paintAt(e: React.MouseEvent, strokeStart: boolean) {
+    if (!editor || !import.meta.env.DEV) return
+    const t = tileFromMouse(e)
+    if (!t) return
+    const loc = WORLD[locIdRef.current]
+    const [tx, ty] = t
+    if (strokeStart) {
+      const cur = loc.tiles[ty][tx]
+      // first click decides the stroke: toggle there, then paint that value
+      paintRef.current = e.shiftKey ? (cur === '~' ? '.' : '~') : (cur === '#' ? '.' : '#')
+    }
+    if (paintRef.current && setTileChar(loc, tx, ty, paintRef.current)) setMapDirty(true)
+  }
+  async function saveMap() {
+    const loc = WORLD[locIdRef.current]
+    try {
+      const r = await fetch('/__map/save', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ loc: loc.id, tiles: loc.tiles })
+      })
+      if (!r.ok) throw new Error(await r.text())
+      setMapDirty(false)
+      showToast(`🧱 Map saved → src/data/maps/${loc.id}.json`)
+    } catch (err) {
+      showToast(`⚠️ Map save failed: ${String(err).slice(0, 90)}`)
+    }
+  }
 
   /* canvas sizing (fills the viewport, 4:3) */
   useEffect(() => {
@@ -278,6 +326,11 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
     const down = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase()
       if (k === 'escape') { setDialog(null); return }
+      if (k === 'g') {
+        // collision grid: view anywhere, edit + save in dev
+        setEditor(v => { const n = !v; (window as any).__kqGrid = n; return n })
+        return
+      }
       if (overlayRef.current) return
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
         keysRef.current[k] = true
@@ -415,8 +468,28 @@ export default function TownScreen({ onHome, onStories, showToast, musicOn, onTo
       </div>
 
       <div className="stage-wrap" ref={wrapRef}>
-        <canvas ref={canvasRef} className="stage" width={COLS * TILE * 4} height={ROWS * TILE * 4} />
+        <canvas ref={canvasRef} className="stage" width={COLS * TILE * 4} height={ROWS * TILE * 4}
+          style={editor ? { cursor: 'crosshair' } : undefined}
+          onMouseDown={e => paintAt(e, true)}
+          onMouseMove={e => { if (e.buttons & 1) paintAt(e, false) }}
+          onMouseUp={() => { paintRef.current = null }}
+          onMouseLeave={() => { paintRef.current = null }} />
         <div className="scene-chip">{WORLD[locId].label}</div>
+        {editor && import.meta.env.DEV && (
+          <div style={{
+            position: 'absolute', top: 10, right: 10, zIndex: 10,
+            display: 'flex', gap: 8, alignItems: 'center',
+            background: 'rgba(28,27,25,0.85)', color: '#EFE7D8',
+            padding: '5px 8px 5px 12px', borderRadius: 8,
+            font: '600 12px/1.3 "Zen Maru Gothic", sans-serif'
+          }}>
+            <span>🧱 click/drag: block ⇄ clear · ⇧click: water · G: close</span>
+            <button className="btn small" onClick={saveMap}
+              style={mapDirty ? { boxShadow: '0 0 0 2px #C1440E' } : undefined}>
+              {mapDirty ? 'Save map ●' : 'Save map'}
+            </button>
+          </div>
+        )}
 
         {/* -------- day brief -------- */}
         {phase === 'brief' && (
